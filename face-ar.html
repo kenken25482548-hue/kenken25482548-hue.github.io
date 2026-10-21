@@ -3,236 +3,63 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101321">
 <title>Funny Robot Face AR</title>
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-  }
-}
-</script>
-
 <style>
-*{box-sizing:border-box}
-html,body{
-  margin:0;width:100%;height:100%;overflow:hidden;
-  background:#101321;font-family:Arial,Tahoma,sans-serif
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #101321;
+  font-family: Arial, Tahoma, sans-serif;
 }
-#video,#canvas{
-  position:fixed;inset:0;width:100%;height:100%;
-  object-fit:cover
+
+#video, #canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
-#video{z-index:0;transform:scaleX(-1)}
-#canvas{z-index:1;pointer-events:none}
-button{
-  position:fixed;z-index:10;border:0;border-radius:12px;
-  padding:14px 18px;font-size:16px;font-weight:bold;
-  cursor:pointer
+
+#video {
+  z-index: 0;
+  object-fit: cover;
+  transform: scaleX(-1);
+  background: #101321;
 }
-button:disabled{opacity:.6}
-#start{
-  top:calc(env(safe-area-inset-top,0px) + 18px);
-  left:50%;transform:translateX(-50%);
-  background:#ffbd69;color:#171923
+
+#canvas {
+  z-index: 1;
+  pointer-events: none;
 }
-#switch{
-  top:calc(env(safe-area-inset-top,0px) + 18px);
-  right:12px;background:white;color:#171923
+
+button {
+  position: fixed;
+  z-index: 10;
+  border: 0;
+  border-radius: 12px;
+  padding: 13px 17px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-#panel{
-  position:fixed;z-index:5;left:4%;width:92%;
-  bottom:calc(env(safe-area-inset-bottom,0px) + 18px);
-  padding:16px;border:1px solid #41465a;border-radius:18px;
-  background:#101321ed;color:white;text-align:center
+
+button:disabled {
+  opacity: .6;
 }
-#status{margin:0 0 8px;font-weight:bold;font-size:17px}
-#help{margin:0;font-size:13px;line-height:1.6;overflow-wrap:anywhere}
-[hidden]{display:none!important}
-</style>
-</head>
 
-<body>
-<video id="video" autoplay playsinline muted></video>
-<canvas id="canvas"></canvas>
+#start {
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ffbd69;
+  color: #171923;
+}
 
-<button id="start">เปิดกล้องหน้า</button>
-<button id="switch" hidden>สลับกล้อง</button>
-
-<div id="panel">
-  <p id="status">พร้อมเปิดกล้อง</p>
-  <p id="help">กดปุ่มเพื่อเริ่ม Face AR</p>
-</div>
-
-<script>
-(function(){
-  const video = document.getElementById('video');
-  const canvas = document.getElementById('canvas');
-  const startBtn = document.getElementById('start');
-  const switchBtn = document.getElementById('switch');
-  const statusEl = document.getElementById('status');
-  const helpEl = document.getElementById('help');
-
-  let stream = null;
-  let facingMode = 'user';
-  let busy = false;
-  let running = false;
-  let THREE = null;
-  let renderer = null;
-  let scene = null;
-  let camera = null;
-  let robot = null;
-  let landmarker = null;
-  let faceTaskModule = null;
-  let baseScale = 1;
-  let lastVideoTime = -1;
-
-  function status(title, detail){
-    statusEl.textContent = title;
-    helpEl.textContent = detail;
-  }
-
-  function stopCamera(){
-    if(stream){
-      stream.getTracks().forEach(track => track.stop());
-      stream = null;
-    }
-    video.srcObject = null;
-  }
-
-  async function openCamera(){
-    if(busy) return;
-
-    busy = true;
-    startBtn.disabled = true;
-
-    try{
-      status('กำลังตรวจสอบกล้อง...','กรุณารอสักครู่');
-
-      if(!window.isSecureContext){
-        throw new Error('ต้องเปิดผ่าน HTTPS ของ GitHub Pages');
-      }
-
-      if(!navigator.mediaDevices ||
-         !navigator.mediaDevices.getUserMedia){
-        throw new Error('เบราว์เซอร์ไม่รองรับกล้อง กรุณาใช้ Safari หรือ Chrome');
-      }
-
-      running = false;
-
-      if(landmarker){
-        landmarker.close();
-        landmarker = null;
-      }
-
-      stopCamera();
-
-      // เปิดกล้องทันที ก่อนโหลดระบบ AR
-      status('กำลังขออนุญาตกล้อง','หากมีหน้าต่างถาม ให้กด Allow');
-
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio:false,
-        video:{
-          facingMode:{ideal:facingMode},
-          width:{ideal:1280},
-          height:{ideal:720}
-        }
-      });
-
-      video.srcObject = stream;
-      await video.play();
-
-      status('เปิดกล้องสำเร็จ','กำลังโหลดระบบ 3D');
-
-      await loadThree();
-      await loadFaceDetection();
-
-      startBtn.hidden = true;
-      switchBtn.hidden = false;
-      running = true;
-      lastVideoTime = -1;
-
-      status('Face AR พร้อมใช้งาน','หันหน้าเข้าหากล้อง');
-      requestAnimationFrame(trackFrame);
-
-    }catch(error){
-      console.error('Face AR error:',error);
-      running = false;
-
-      let message = error.message || error.name || 'เกิดข้อผิดพลาด';
-
-      if(error.name === 'NotAllowedError' ||
-         error.name === 'PermissionDeniedError'){
-        message = 'กล้องไม่ได้รับอนุญาต กรุณาตั้งค่า Camera ของเว็บไซต์เป็น Allow';
-      }else if(error.name === 'NotFoundError'){
-        message = 'ไม่พบกล้องในอุปกรณ์';
-      }else if(error.name === 'NotReadableError'){
-        message = 'กล้องกำลังถูกใช้งานโดยแอปอื่น กรุณาปิดแอปนั้น';
-      }
-
-      status('เริ่ม Face AR ไม่สำเร็จ',message);
-      startBtn.hidden = false;
-      switchBtn.hidden = true;
-
-    }finally{
-      busy = false;
-      startBtn.disabled = false;
-    }
-  }
-
-  async function loadThree(){
-    if(renderer && robot) return;
-
-    status('กำลังโหลด Three.js','กำลังดาวน์โหลดระบบ 3D');
-
-    THREE = await import('three');
-
-    const {GLTFLoader} = await import(
-      'three/addons/loaders/GLTFLoader.js'
-    );
-
-    renderer = new THREE.WebGLRenderer({
-      canvas:canvas,
-      alpha:true,
-      antialias:true
-    });
-
-    renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio || 1,2)
-    );
-    renderer.setClearColor(0x000000,0);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-    scene = new THREE.Scene();
-
-    camera = new THREE.OrthographicCamera(-1,1,1,-1,0.01,100);
-    camera.position.z = 10;
-
-    scene.add(
-      new THREE.HemisphereLight(0xffffff,0x555577,2)
-    );
-
-    const light = new THREE.DirectionalLight(0xffffff,2);
-    light.position.set(1,2,5);
-    scene.add(light);
-
-    function resize(){
-      const aspect = window.innerWidth / window.innerHeight;
-      renderer.setSize(window.innerWidth,window.innerHeight,false);
-      camera.left = -aspect;
-      camera.right = aspect;
-      camera.top = 1;
-      camera.bottom = -1;
-      camera.updateProjectionMatrix();
-    }
-
-    window.removeEventListener('resize',resize);
-    window.addEventListener('resize',resize);
-    resize();
-
-    status('กำลังโหลดหัวหุ่นยนต์','กำลังอ่าน funny_robot_head.glb');
-
-    await new Promise((resolve,reject)=>{
-      new GLTFLoader().load(
-        './funny_robot_head.gl
+#switch {
+  top
