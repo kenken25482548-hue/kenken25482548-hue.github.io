@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -26,40 +27,568 @@ html, body {
 }
 
 #video {
-  z-index: 0;
+  z-index: 1;
   object-fit: cover;
   transform: scaleX(-1);
   background: #101321;
 }
 
 #canvas {
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
 }
 
-button {
+#controls {
   position: fixed;
   z-index: 10;
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+}
+
+button {
   border: 0;
   border-radius: 12px;
-  padding: 13px 17px;
+  padding: 13px 16px;
   font-size: 15px;
   font-weight: bold;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
-button:disabled {
-  opacity: .6;
-}
-
 #start {
-  top: calc(env(safe-area-inset-top, 0px) + 16px);
-  left: 50%;
-  transform: translateX(-50%);
   background: #ffbd69;
   color: #171923;
 }
 
 #switch {
-  top
+  background: white;
+  color: #171923;
+}
+
+button:disabled {
+  opacity: .6;
+}
+
+#panel {
+  position: fixed;
+  z-index: 5;
+  left: 4%;
+  width: 92%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  padding: 14px;
+  border: 1px solid #41465a;
+  border-radius: 16px;
+  background: rgba(16, 19, 33, .92);
+  color: white;
+  text-align: center;
+  pointer-events: none;
+}
+
+#status {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+#help {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+[hidden] {
+  display: none !important;
+}
+</style>
+</head>
+
+<body>
+
+<video id="video" autoplay muted playsinline></video>
+<canvas id="canvas"></canvas>
+
+<div id="controls">
+  <button id="start">เปิดกล้อง</button>
+  <button id="switch" hidden>สลับกล้อง</button>
+</div>
+
+<div id="panel">
+  <p id="status">พร้อมใช้งาน</p>
+  <p id="help">กดปุ่มเปิดกล้องเพื่อเริ่มต้น</p>
+</div>
+
+<script type="module">
+const video = document.querySelector('#video');
+const canvas = document.querySelector('#canvas');
+const startButton = document.querySelector('#start');
+const switchButton = document.querySelector('#switch');
+const statusText = document.querySelector('#status');
+const helpText = document.querySelector('#help');
+
+const MODEL_URL = './funny_robot_head.glb';
+
+const THREE_URL =
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const GLTF_URL =
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+
+const VISION_URL =
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+
+let stream = null;
+let landmarker = null;
+let renderer = null;
+let scene = null;
+let camera = null;
+let robot = null;
+let THREE = null;
+
+let busy = false;
+let running = false;
+let facingMode = 'user';
+let frameId = 0;
+let lastVideoTime = -1;
+let robotBaseSize = 1;
+let modelRollOffset = 0;
+
+function showStatus(title, message) {
+  statusText.textContent = title;
+  helpText.textContent = message;
+}
+
+function stopStream() {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+
+  video.srcObject = null;
+}
+
+function stopAR() {
+  running = false;
+
+  if (frameId) {
+    cancelAnimationFrame(frameId);
+    frameId = 0;
+  }
+
+  if (landmarker) {
+    try {
+      landmarker.close();
+    } catch (error) {
+      console.warn(error);
+    }
+    landmarker = null;
+  }
+
+  stopStream();
+}
+
+async function startCamera() {
+  if (busy) return;
+
+  busy = true;
+  startButton.disabled = true;
+
+  try {
+    if (!window.isSecureContext) {
+      throw new Error(
+        'ต้องเปิดเว็บผ่าน HTTPS ของ GitHub Pages'
+      );
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error(
+        'ไม่สามารถเรียกใช้กล้องผ่านเบราว์เซอร์นี้ได้'
+      );
+    }
+
+    running = false;
+
+    if (frameId) {
+      cancelAnimationFrame(frameId);
+      frameId = 0;
+    }
+
+    if (landmarker) {
+      try {
+        landmarker.close();
+      } catch (error) {}
+      landmarker = null;
+    }
+
+    stopStream();
+
+    showStatus(
+      'กำลังเปิดกล้อง...',
+      'รอการอนุญาตใช้งานกล้อง'
+    );
+
+    // ขอเปิดกล้องก่อนโหลดระบบ 3D
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: facingMode },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    });
+
+    video.srcObject = stream;
+    await video.play();
+
+    showStatus(
+      'เปิดกล้องแล้ว',
+      'กำลังโหลดระบบ 3D'
+    );
+
+    await initThree();
+    await initFaceDetection();
+
+    running = true;
+    lastVideoTime = -1;
+
+    startButton.hidden = true;
+    switchButton.hidden = false;
+
+    showStatus(
+      'Face AR ทำงานแล้ว',
+      'หันหน้าเข้าหากล้อง'
+    );
+
+    frameId = requestAnimationFrame(trackFace);
+
+  } catch (error) {
+    console.error('Face AR error:', error);
+
+    running = false;
+    stopStream();
+
+    if (landmarker) {
+      try {
+        landmarker.close();
+      } catch (e) {}
+      landmarker = null;
+    }
+
+    let message = error.message || 'เกิดข้อผิดพลาด';
+
+    if (error.name === 'NotAllowedError' ||
+        error.name === 'PermissionDeniedError') {
+      message = 'การเข้าถึงกล้องถูกปฏิเสธ';
+    } else if (error.name === 'NotFoundError') {
+      message = 'ไม่พบกล้องในอุปกรณ์';
+    } else if (error.name === 'NotReadableError') {
+      message = 'ไม่สามารถเปิดกล้องได้ในขณะนี้';
+    }
+
+    showStatus('เริ่มต้นไม่สำเร็จ', message);
+
+    startButton.hidden = false;
+    switchButton.hidden = true;
+
+  } finally {
+    busy = false;
+    startButton.disabled = false;
+  }
+}
+
+async function initThree() {
+  if (renderer && robot) return;
+
+  showStatus('กำลังโหลด Three.js', 'กรุณารอสักครู่');
+
+  const THREE_MODULE = await import(THREE_URL);
+  const { GLTFLoader } = await import(GLTF_URL);
+
+  THREE = THREE_MODULE;
+
+  renderer = new THREE.WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: true,
+    powerPreference: 'high-performance'
+  });
+
+  renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio || 1, 2)
+  );
+
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  scene = new THREE.Scene();
+
+  camera = new THREE.OrthographicCamera(
+    -1, 1, 1, -1, 0.01, 100
+  );
+
+  camera.position.set(0, 0, 10);
+  camera.lookAt(0, 0, 0);
+
+  scene.add(
+    new THREE.HemisphereLight(0xffffff, 0x555577, 2)
+  );
+
+  const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
+  keyLight.position.set(1, 2, 5);
+  scene.add(keyLight);
+
+  const fillLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  fillLight.position.set(-3, 1, 4);
+  scene.add(fillLight);
+
+  resizeScene();
+  window.addEventListener('resize', resizeScene);
+
+  showStatus(
+    'กำลังโหลดโมเดล',
+    'กำลังเปิด funny_robot_head.glb'
+  );
+
+  const gltf = await new Promise((resolve, reject) => {
+    const loader = new GLTFLoader();
+
+    loader.load(
+      MODEL_URL,
+      resolve,
+      undefined,
+      () => reject(new Error(
+        'โหลด funny_robot_head.glb ไม่ได้ ตรวจชื่อไฟล์และตำแหน่งใน GitHub'
+      ))
+    );
+  });
+
+  robot = gltf.scene;
+
+  const bounds = new THREE.Box3().setFromObject(robot);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+
+  bounds.getSize(size);
+  bounds.getCenter(center);
+
+  const maxSize = Math.max(size.x, size.y, size.z);
+
+  if (!Number.isFinite(maxSize) || maxSize <= 0) {
+    throw new Error('โมเดล 3D มีขนาดไม่ถูกต้อง');
+  }
+
+  // จัดจุดหมุนให้อยู่กึ่งกลางโมเดล
+  robot.position.sub(center);
+
+  // ปรับขนาดโมเดลให้เริ่มต้นในสเกลที่ควบคุมง่าย
+  robotBaseSize = maxSize;
+  robot.scale.setScalar(1 / maxSize);
+
+  // ถ้าหุ่นหันผิดทิศ สามารถปรับมุมนี้ได้
+  modelRollOffset = 0;
+
+  scene.add(robot);
+  robot.visible = false;
+
+  renderer.render(scene, camera);
+}
+
+function resizeScene() {
+  if (!renderer || !camera) return;
+
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const aspect = width / height;
+
+  renderer.setSize(width, height, false);
+
+  camera.left = -aspect;
+  camera.right = aspect;
+  camera.top = 1;
+  camera.bottom = -1;
+  camera.updateProjectionMatrix();
+}
+
+async function initFaceDetection() {
+  showStatus(
+    'กำลังโหลดระบบจับใบหน้า',
+    'กำลังดาวน์โหลด MediaPipe'
+  );
+
+  const vision = await import(
+    VISION_URL + '/vision_bundle.mjs'
+  );
+
+  const files = await vision.FilesetResolver.forVisionTasks(
+    VISION_URL + '/wasm'
+  );
+
+  const options = {
+    baseOptions: {
+      modelAssetPath:
+        'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+      delegate: 'GPU'
+    },
+    runningMode: 'VIDEO',
+    numFaces: 1,
+    outputFaceBlendshapes: false,
+    outputFacialTransformationMatrixes: false
+  };
+
+  try {
+    landmarker = await vision.FaceLandmarker.createFromOptions(
+      files,
+      options
+    );
+  } catch (gpuError) {
+    console.warn('GPU initialization failed; trying CPU', gpuError);
+
+    options.baseOptions.delegate = 'CPU';
+
+    landmarker = await vision.FaceLandmarker.createFromOptions(
+      files,
+      options
+    );
+  }
+}
+
+function trackFace() {
+  if (!running) return;
+
+  try {
+    if (
+      video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+      landmarker &&
+      renderer &&
+      scene &&
+      camera
+    ) {
+      if (video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+
+        const result = landmarker.detectForVideo(
+          video,
+          performance.now()
+        );
+
+        const faces = result.faceLandmarks;
+
+        if (faces && faces.length > 0) {
+          updateRobot(faces[0]);
+        } else if (robot) {
+          robot.visible = false;
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+  } catch (error) {
+    console.error('Face tracking error:', error);
+  }
+
+  frameId = requestAnimationFrame(trackFace);
+}
+
+function updateRobot(points) {
+  if (!robot || !THREE || points.length < 264) return;
+
+  const leftEye = points[33];
+  const rightEye = points[263];
+  const nose = points[1];
+
+  if (!leftEye || !rightEye || !nose) return;
+
+  const eyeDistance = Math.hypot(
+    rightEye.x - leftEye.x,
+    rightEye.y - leftEye.y
+  );
+
+  if (!Number.isFinite(eyeDistance) || eyeDistance < 0.001) {
+    return;
+  }
+
+  // กล้องหน้ากลับด้านอยู่แล้ว จึงกลับแกน X สำหรับโมเดล
+  const x = (0.5 - nose.x) * 2;
+  const y = (0.5 - nose.y) * 2;
+  const aspect = window.innerWidth / window.innerHeight;
+
+  const targetX = x * aspect;
+  const targetY = y;
+
+  // ระยะระหว่างตาช่วยกำหนดขนาดหัวหุ่นยนต์
+  const targetScale = Math.max(
+    0.12,
+    Math.min(eyeDistance * 2.5, 1.8)
+  );
+
+  const roll = Math.atan2(
+    rightEye.y - leftEye.y,
+    rightEye.x - leftEye.x
+  );
+
+  const smoothing = 0.35;
+
+  robot.position.x +=
+    (targetX - robot.position.x) * smoothing;
+
+  robot.position.y +=
+    (targetY - robot.position.y) * smoothing;
+
+  const currentScale = robot.scale.x * robotBaseSize;
+  const nextScale =
+    currentScale + (targetScale - currentScale) * smoothing;
+
+  robot.scale.setScalar(nextScale / robotBaseSize);
+
+  robot.rotation.z +=
+    (-roll + modelRollOffset - robot.rotation.z) * smoothing;
+
+  robot.visible = true;
+}
+
+async function switchCamera() {
+  if (busy) return;
+
+  facingMode =
+    facingMode === 'user' ? 'environment' : 'user';
+
+  stopAR();
+
+  startButton.hidden = false;
+  switchButton.hidden = true;
+
+  showStatus('กำลังสลับกล้อง', 'กรุณารอสักครู่');
+
+  await startCamera();
+}
+
+startButton.addEventListener('click', startCamera);
+switchButton.addEventListener('click', switchCamera);
+
+window.addEventListener('pagehide', () => {
+  running = false;
+
+  if (frameId) cancelAnimationFrame(frameId);
+
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+  }
+
+  if (landmarker) {
+    try {
+      landmarker.close();
+    } catch (error) {}
+  }
+
+  if (renderer) renderer.dispose();
+});
+</script>
+
+</body>
+</html>
