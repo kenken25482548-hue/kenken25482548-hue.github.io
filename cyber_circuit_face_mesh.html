@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080d1b">
+<title>Cyber Circuit | Face Mesh Texture AR</title>
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-face-aframe.prod.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
+:root{font-family:Kanit,sans-serif;color:#ecf9ff;background:#080d1b}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}a-scene{position:fixed;inset:0;width:100%;height:100%} .top{position:fixed;top:0;left:0;right:0;z-index:12;padding:calc(env(safe-area-inset-top) + 18px) 20px 0;pointer-events:none;display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.brand{font-size:22px;font-weight:700;line-height:1.1;text-shadow:0 2px 12px #000}.brand span{color:#5ce9ff}.sub{font-size:11px;letter-spacing:3px;color:#c5dcf0;margin-top:8px}.tag{color:#71f6ec;border:1px solid #71f6ec55;background:#071e34a8;border-radius:25px;padding:7px 12px;font-size:11px;letter-spacing:2px}.bottom{position:fixed;bottom:0;left:0;right:0;z-index:12;background:linear-gradient(0deg,rgba(6,10,25,.98),rgba(6,10,25,.83) 75%,transparent);padding:35px 14px calc(env(safe-area-inset-bottom) + 19px)}.panel{margin:auto;max-width:560px;background:#132036d9;border:1px solid #6387c35e;border-radius:22px;padding:16px;box-shadow:0 10px 60px #0008;backdrop-filter:blur(14px)}.heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.heading strong{font-size:18px;font-weight:600}.heading small{font-size:12px;color:#93a9c7}.status{font-size:12px;color:#b0c8e5;margin:3px 0 13px;min-height:19px}.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.filter{border:1px solid #547197;background:#10192b;border-radius:14px;padding:11px 3px;color:#c7dcf8;cursor:pointer;font-family:inherit;font-size:13px;transition:.2s}.filter.active{background:#04dbed26;color:#75f6ff;border-color:#41effa;box-shadow:inset 0 0 0 1px #41effa44}.filter span{display:block;font-size:21px;margin-bottom:2px}.actions{display:flex;gap:8px;margin-top:11px}.actions button{font-family:inherit;flex:1;border:0;border-radius:12px;padding:10px;color:#071323;background:#61e9fb;font-weight:600;cursor:pointer}.actions button.secondary{background:#213653;color:#c5e8ff}.help{margin:10px 0 0;font-size:11px;color:#91a7c3;text-align:center}.loading{position:fixed;z-index:15;inset:0;background:#081022;display:grid;place-items:center;text-align:center;padding:24px}.loading>div{max-width:340px}.loading .orb{display:block;margin:auto auto 20px;width:72px;height:72px;border-radius:50%;border:3px solid #263a55;border-top-color:#61e9fb;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.loading strong{display:block;font-size:19px}.loading p{color:#b2c6df;font-size:13px;line-height:1.7}.loading.hidden{display:none}.error{color:#ffb9b9!important}.hidden-ui .top,.hidden-ui .bottom{display:none}@media(max-width:350px){.brand{font-size:19px}.filter{font-size:11px}.tag{font-size:9px}}
+</style>
+</head>
+<body>
+<div class="top"><div><div class="brand">CYBER <span>CIRCUIT</span></div><div class="sub">FACE MESH TEXTURE AR</div></div><div class="tag">● LIVE AR</div></div>
+<div class="bottom"><div class="panel"><div class="heading"><strong>เลือก Face Texture</strong><small>3 FILTERS</small></div><div class="status" id="status">กำลังเริ่มระบบกล้อง…</div><div class="filters"><button class="filter" data-filter="neon"><span>⚡</span>Neon Pulse</button><button class="filter" data-filter="galaxy"><span>✦</span>Galaxy Skin</button><button class="filter active" data-filter="circuit"><span>⌘</span>Cyber Circuit</button></div><div class="actions"><button id="capture">📸 บันทึกภาพหน้าจอ*</button><button id="hide" class="secondary">ซ่อนเมนู</button></div><div class="help">*บางเบราว์เซอร์ไม่อนุญาตให้บันทึกภาพกล้อง ให้ใช้ฟังก์ชัน Screenshot ของเครื่องแทน</div></div></div>
+<div id="loading" class="loading"><div><span class="orb"></span><strong>กำลังเตรียม Face Tracking</strong><p id="loadingText">โปรดอนุญาตการใช้งานกล้อง แล้วหันใบหน้าเข้าหากล้อง<br>ต้องเปิดผ่าน HTTPS หรือ localhost</p><button id="retry" style="display:none;background:#6ceaf9;color:#051324;border:0;border-radius:10px;padding:10px 18px;font-family:inherit">ลองใหม่</button></div></div>
+<a-scene mindar-face="faceOccluder: false; autoStart: true" embedded vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="colorManagement: true; alpha: true; antialias: true">
+<a-entity id="face" mindar-face-default-face-occluder></a-entity>
+<a-camera active="false" position="0 0 0"></a-camera>
+</a-scene>
+<script>
+(() => {
+'use strict';
+const scene=document.querySelector('a-scene');
+const face=document.getElementById('face');
+const status=document.getElementById('status');
+const loading=document.getElementById('loading');
+const loadingText=document.getElementById('loadingText');
+let ready=false, current='circuit', activeTexture=null, mesh=null;
+const names={neon:'Neon Pulse',galaxy:'Galaxy Skin',circuit:'Cyber Circuit'};
+// All textures are original procedural UV patterns, not copied assets.
+function textureFor(kind){
+ const c=document.createElement('canvas');c.width=c.height=1024;
+ const ctx=c.getContext('2d');const w=c.width,h=c.height;
+ ctx.clearRect(0,0,w,h);
+ const rnd=(n)=>{let x=Math.sin(n*78.233+kind.length*17.35)*43758.5453;return x-Math.floor(x)};
+ if(kind==='neon'){
+  let gr=ctx.createRadialGradient(520,520,20,520,520,610);gr.addColorStop(0,'rgba(0,245,255,.06)');gr.addColorStop(.6,'rgba(4,38,94,.32)');gr.addColorStop(1,'rgba(10,70,150,.08)');ctx.fillStyle=gr;ctx.fillRect(0,0,w,h);
+  for(let i=0;i<18;i++){let y=60+i*54;ctx.strokeStyle=i%3===0?'rgba(105,250,255,.90)':'rgba(91,141,255,.52)';ctx.lineWidth=i%3===0?7:3;ctx.beginPath();ctx.moveTo(30,y);ctx.bezierCurveTo(210,y-27,290,y+28,500,y);ctx.bezierCurveTo(690,y-25,790,y+23,990,y);ctx.stroke();}
+  for(let i=0;i<38;i++){let x=rnd(i+11)*w,y=rnd(i+120)*h;ctx.fillStyle='#a1fbff';ctx.beginPath();ctx.arc(x,y,2+rnd(i+222)*5,0,Math.PI*2);ctx.fill();}
+ } else if(kind==='galaxy'){
+  let gr=ctx.createLinearGradient(0,0,1024,1024);gr.addColorStop(0,'rgba(63,17,146,.34)');gr.addColorStop(.5,'rgba(222,62,173,.42)');gr.addColorStop(1,'rgba(11,143,234,.28)');ctx.fillStyle=gr;ctx.fillRect(0,0,w,h);
+  for(let i=0;i<260;i++){let x=rnd(i+5)*w,y=rnd(i+537)*h,rad=1+rnd(i+975)*6;ctx.fillStyle=i%5===0?'#ffb9ee':'rgba(218,231,255,.83)';ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);ctx.fill();}
+  for(let i=0;i<13;i++){let x=rnd(i+600)*w,y=rnd(i+900)*h;ctx.strokeStyle='rgba(255,175,255,.6)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x-20,y);ctx.lineTo(x+20,y);ctx.moveTo(x,y-20);ctx.lineTo(x,y+20);ctx.stroke();}
+ } else {
+  ctx.fillStyle='rgba(3,84,65,.30)';ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='rgba(83,255,181,.90)';ctx.lineWidth=6;ctx.lineCap='round';ctx.lineJoin='round';
+  for(let i=0;i<36;i++){let x=20+Math.floor(rnd(i+22)*16)*64,y=20+Math.floor(rnd(i+333)*16)*64;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+44,y);ctx.lineTo(x+44,y+32);ctx.stroke();ctx.fillStyle=i%3?'#79ffc6':'#ffef91';ctx.beginPath();ctx.arc(x+44,y+32,7,0,Math.PI*2);ctx.fill();}
+  for(let i=0;i<8;i++){ctx.strokeStyle='rgba(255,218,104,.86)';ctx.lineWidth=3;ctx.strokeRect(i*120+14,i*116+18,38,38);}
+ }
+ const t=new AFRAME.THREE.CanvasTexture(c);t.colorSpace=AFRAME.THREE.SRGBColorSpace;t.needsUpdate=true;return t;
+}
+function apply(){if(!ready)return;mesh=face.getObject3D('mesh');if(!mesh){status.textContent='กำลังเตรียมโมเดลใบหน้า…';setTimeout(apply,350);return;}const THREE=AFRAME.THREE;let texture=textureFor(current);const oldMaterial=mesh.material;mesh.material=new THREE.MeshBasicMaterial({map:texture,transparent:true,opacity:current==='galaxy'?.72:.79,side:THREE.DoubleSide,depthWrite:false});mesh.frustumCulled=false;if(oldMaterial?.dispose)oldMaterial.dispose();if(activeTexture)activeTexture.dispose();activeTexture=texture;status.textContent='ฟิลเตอร์ '+names[current]+' พร้อมแล้ว • หันหน้าเข้าหากล้อง';}
+function fail(text){loading.classList.remove('hidden');loadingText.textContent=text;loadingText.classList.add('error');document.getElementById('retry').style.display='inline-block';status.textContent=text;}
+scene.addEventListener('arReady',()=>{ready=true;loading.classList.add('hidden');apply();});
+scene.addEventListener('arError',()=>fail('ไม่สามารถเปิดกล้องหรือโหลด AR ได้ ตรวจสิทธิ์กล้อง อินเทอร์เน็ต และเปิดผ่าน HTTPS'));
+scene.addEventListener('targetFound',()=>{status.textContent='ตรวจพบใบหน้า • '+names[current];});
+scene.addEventListener('targetLost',()=>{status.textContent='ไม่พบใบหน้า • ลองหันหน้าเข้าหากล้อง';});
+face.addEventListener('object3dset',()=>{if(ready&&!mesh)apply();});
+document.querySelectorAll('[data-filter]').forEach(b=>b.addEventListener('click',()=>{current=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));apply();}));
+document.getElementById('retry').addEventListener('click',()=>location.reload());
+document.getElementById('hide').addEventListener('click',()=>{document.body.classList.add('hidden-ui');status.textContent='แตะจอเพื่อเปิดเมนู';});
+document.addEventListener('click',e=>{if(document.body.classList.contains('hidden-ui'))document.body.classList.remove('hidden-ui');});
+document.getElementById('capture').addEventListener('click',()=>{status.textContent='ใช้ Screenshot ของโทรศัพท์เพื่อบันทึกภาพ AR (เพื่อรองรับกล้องทุกเบราว์เซอร์)';});
+setTimeout(()=>{if(!ready)fail('กำลังรอการอนุญาตกล้องหรือไฟล์ระบบ AR หากยังไม่เริ่ม โปรดตรวจอินเทอร์เน็ตและการอนุญาตกล้อง');},20000);
+})();
+</script>
+</body>
+</html>
