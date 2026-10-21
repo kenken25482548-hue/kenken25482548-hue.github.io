@@ -1,23 +1,33 @@
+
 <!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#101321">
-<title>Robot Face Texture AR</title>
+<title>Robot Face AR | Expression Tracker</title>
 
 <style>
-* {
-  box-sizing: border-box;
+:root {
+  --bg: #0b0e1c;
+  --panel: rgba(20, 25, 47, .94);
+  --line: #343d61;
+  --cyan: #28f0f4;
+  --purple: #8d65ff;
+  --yellow: #ffca72;
+  --white: #f4f6ff;
 }
+
+* { box-sizing: border-box; }
 
 html, body {
   margin: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #101321;
-  font-family: Arial, Tahoma, sans-serif;
+  background: var(--bg);
+  color: var(--white);
+  font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
 }
 
 #video, #canvas {
@@ -28,10 +38,10 @@ html, body {
 }
 
 #video {
+  z-index: 0;
   object-fit: cover;
   transform: scaleX(-1);
-  background: #101321;
-  z-index: 0;
+  background: var(--bg);
 }
 
 #canvas {
@@ -39,73 +49,232 @@ html, body {
   pointer-events: none;
 }
 
+#topbar {
+  position: fixed;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: 14px;
+  right: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+}
+
+.brand-icon {
+  width: 35px;
+  height: 35px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #8c5dff, #19dce8);
+  font-size: 20px;
+}
+
+.brand-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .6px;
+}
+
+.brand-subtitle {
+  margin-top: 3px;
+  color: #aab4d9;
+  font-size: 10px;
+}
+
+#liveBadge {
+  border: 1px solid #285b60;
+  border-radius: 30px;
+  padding: 9px 12px;
+  background: rgba(10, 36, 42, .9);
+  color: #69fff1;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 #controls {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 16px);
-  left: 0;
-  width: 100%;
+  z-index: 8;
+  top: calc(env(safe-area-inset-top, 0px) + 83px);
+  left: 14px;
+  right: 14px;
   display: flex;
   justify-content: center;
-  gap: 10px;
-  z-index: 10;
-  padding: 0 12px;
+  gap: 9px;
 }
 
 button {
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 13px;
-  padding: 14px 19px;
-  font-size: 16px;
-  font-weight: bold;
+  padding: 12px 17px;
+  font-size: 14px;
+  font-weight: 800;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
 #start {
-  background: #ffbd69;
-  color: #171923;
+  background: linear-gradient(135deg, #ffd48a, #ffad57);
+  color: #21152a;
+  box-shadow: 0 5px 24px #ffbd6930;
 }
 
 #switch {
-  background: #fff;
-  color: #171923;
+  background: rgba(25, 30, 55, .95);
+  color: white;
+  border-color: #485171;
 }
 
 button:disabled {
-  opacity: .6;
+  opacity: .55;
 }
 
-#panel {
+#bottomPanel {
   position: fixed;
   z-index: 5;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
-  left: 4%;
-  width: 92%;
+  left: 14px;
+  right: 14px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  max-height: 42vh;
+  overflow-y: auto;
   padding: 15px;
-  border: 1px solid #41465a;
-  border-radius: 18px;
-  background: rgba(16, 19, 33, .93);
-  color: white;
-  text-align: center;
-  pointer-events: none;
+  border: 1px solid var(--line);
+  border-radius: 21px;
+  background: var(--panel);
+  backdrop-filter: blur(15px);
+  box-shadow: 0 12px 45px #0005;
+}
+
+#statusRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#statusDot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--yellow);
+  box-shadow: 0 0 13px currentColor;
 }
 
 #status {
-  margin: 0 0 7px;
-  font-size: 17px;
-  font-weight: bold;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
 }
 
 #help {
-  margin: 0;
-  font-size: 13px;
+  margin: 7px 0 14px;
+  color: #aeb9d9;
+  font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
-[hidden] {
-  display: none !important;
+.section-label {
+  margin-bottom: 9px;
+  color: #a6b2d9;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
 }
+
+#expressionGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.expression {
+  min-width: 0;
+  padding: 9px 2px 8px;
+  border: 1px solid #303958;
+  border-radius: 12px;
+  background: #11162b;
+  text-align: center;
+  transition: border-color .12s, background .12s;
+}
+
+.expression.active {
+  border-color: var(--cyan);
+  background: #12333d;
+  box-shadow: inset 0 0 15px #28f0f415;
+}
+
+.expression .emoji {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 19px;
+}
+
+.expression .name {
+  display: block;
+  color: #aeb9d9;
+  font-size: 9px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.expression.active .name {
+  color: #7efff4;
+  font-weight: 800;
+}
+
+#confidence {
+  margin-top: 13px;
+}
+
+#confidenceHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #aeb9d9;
+  font-size: 10px;
+}
+
+#bar {
+  height: 5px;
+  margin-top: 7px;
+  border-radius: 10px;
+  background: #29314d;
+  overflow: hidden;
+}
+
+#barFill {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--purple), var(--cyan));
+  transition: width .12s;
+}
+
+[hidden] { display: none !important; }
+
+@media (max-height: 650px) {
+  #bottomPanel { max-height: 36vh; padding: 11px; }
+  #controls { top: calc(env(safe-area-inset-top, 0px) + 70px); }
+  .expression { padding: 6px 1px; }
+  .expression .emoji { font-size: 16px; }
+  #help { margin-bottom: 9px; }
+}
+
 </style>
 </head>
 
@@ -114,24 +283,80 @@ button:disabled {
 <video id="video" autoplay playsinline muted></video>
 <canvas id="canvas"></canvas>
 
-<div id="controls">
-  <button id="start">เปิดกล้อง</button>
-  <button id="switch" hidden>สลับกล้อง</button>
+<div id="topbar">
+  <div class="brand">
+    <div class="brand-icon">🤖</div>
+    <div>
+      <div class="brand-title">ROBOT FACE AR</div>
+      <div class="brand-subtitle">FACIAL EXPRESSION TRACKER</div>
+    </div>
+  </div>
+  <div id="liveBadge">● STANDBY</div>
 </div>
 
-<div id="panel">
-  <p id="status">Robot Face AR</p>
-  <p id="help">กดเปิดกล้องเพื่อเริ่มใช้งาน</p>
+<div id="controls">
+  <button id="start">เปิดกล้อง</button>
+  <button id="switch" hidden>⇄ สลับกล้อง</button>
+</div>
+
+<div id="bottomPanel">
+  <div id="statusRow">
+    <span id="statusDot"></span>
+    <p id="status">พร้อมเริ่มต้น</p>
+  </div>
+  <p id="help">กดเปิดกล้องเพื่อเริ่มตรวจจับสีหน้า</p>
+
+  <div class="section-label">FACIAL EXPRESSIONS · 5 STATES</div>
+
+  <div id="expressionGrid">
+    <div class="expression active" data-state="neutral">
+      <span class="emoji">🤖</span>
+      <span class="name">ปกติ</span>
+    </div>
+    <div class="expression" data-state="blink">
+      <span class="emoji">😑</span>
+      <span class="name">กะพริบตา</span>
+    </div>
+    <div class="expression" data-state="open">
+      <span class="emoji">😮</span>
+      <span class="name">อ้าปาก</span>
+    </div>
+    <div class="expression" data-state="smile">
+      <span class="emoji">😄</span>
+      <span class="name">ยิ้ม</span>
+    </div>
+    <div class="expression" data-state="frown">
+      <span class="emoji">😠</span>
+      <span class="name">หน้าบึ้ง</span>
+    </div>
+  </div>
+
+  <div id="confidence">
+    <div id="confidenceHeader">
+      <span id="expressionText">สถานะ: ปกติ</span>
+      <span id="confidenceText">รอใบหน้า</span>
+    </div>
+    <div id="bar"><div id="barFill"></div></div>
+  </div>
 </div>
 
 <script type="module">
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
+
 const startBtn = document.getElementById('start');
 const switchBtn = document.getElementById('switch');
 const statusEl = document.getElementById('status');
 const helpEl = document.getElementById('help');
+const statusDot = document.getElementById('statusDot');
+const liveBadge = document.getElementById('liveBadge');
+const expressionText = document.getElementById('expressionText');
+const confidenceText = document.getElementById('confidenceText');
+const barFill = document.getElementById('barFill');
+const expressionCards = [
+  ...document.querySelectorAll('.expression')
+];
 
 const VISION_URL =
   'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
@@ -143,23 +368,24 @@ let running = false;
 let facingMode = 'user';
 let frameId = 0;
 let lastVideoTime = -1;
-let lastResult = null;
 let lastFaceTime = 0;
+let face = null;
+let currentState = 'neutral';
+let lostFrames = 0;
 
-let faceX = 0;
-let faceY = 0;
-let faceW = 0;
-let faceH = 0;
-let faceRoll = 0;
-let faceVisible = false;
+const values = {
+  smile: 0,
+  open: 0,
+  blink: 0,
+  frown: 0
+};
 
-let smileValue = 0;
-let mouthValue = 0;
-let blinkValue = 0;
-
-function status(title, detail) {
+function setStatus(title, detail, good = false) {
   statusEl.textContent = title;
   helpEl.textContent = detail;
+  statusDot.style.background = good ? '#44ffd0' : '#ffca72';
+  liveBadge.textContent = good ? '● TRACKING' : '● STANDBY';
+  liveBadge.style.color = good ? '#69fff1' : '#ffca72';
 }
 
 function resizeCanvas() {
@@ -178,12 +404,11 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-function stopCamera() {
+function stopStream() {
   if (stream) {
     stream.getTracks().forEach(track => track.stop());
     stream = null;
   }
-
   video.srcObject = null;
 }
 
@@ -196,15 +421,12 @@ function stopAR() {
   }
 
   if (landmarker) {
-    try {
-      landmarker.close();
-    } catch (e) {
-      console.warn(e);
-    }
+    try { landmarker.close(); } catch (e) {}
     landmarker = null;
   }
 
-  stopCamera();
+  stopStream();
+  face = null;
   ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 }
 
@@ -215,14 +437,14 @@ async function startAR() {
   startBtn.disabled = true;
 
   try {
-    status('กำลังเปิดกล้อง', 'กรุณารอสักครู่');
+    setStatus('กำลังเปิดกล้อง', 'กำลังเตรียมระบบตรวจจับใบหน้า');
 
     if (!window.isSecureContext) {
-      throw new Error('กรุณาเปิดผ่าน HTTPS');
+      throw new Error('กรุณาเปิดเว็บไซต์ผ่าน HTTPS');
     }
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('เบราว์เซอร์ไม่รองรับกล้อง');
+      throw new Error('เบราว์เซอร์ไม่รองรับการเปิดกล้อง');
     }
 
     running = false;
@@ -233,13 +455,11 @@ async function startAR() {
     }
 
     if (landmarker) {
-      try {
-        landmarker.close();
-      } catch (e) {}
+      try { landmarker.close(); } catch (e) {}
       landmarker = null;
     }
 
-    stopCamera();
+    stopStream();
 
     stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
@@ -253,11 +473,9 @@ async function startAR() {
     video.srcObject = stream;
     await video.play();
 
-    status('กำลังโหลดระบบตรวจจับใบหน้า', 'กำลังดาวน์โหลด MediaPipe');
+    setStatus('กำลังโหลด AI', 'กำลังโหลด MediaPipe Face Landmarker');
 
-    const vision = await import(
-      VISION_URL + '/vision_bundle.mjs'
-    );
+    const vision = await import(VISION_URL + '/vision_bundle.mjs');
 
     const files = await vision.FilesetResolver.forVisionTasks(
       VISION_URL + '/wasm'
@@ -275,54 +493,40 @@ async function startAR() {
     };
 
     try {
-      landmarker =
-        await vision.FaceLandmarker.createFromOptions(
-          files,
-          options
-        );
+      landmarker = await vision.FaceLandmarker.createFromOptions(
+        files, options
+      );
     } catch (gpuError) {
-      console.warn('GPU unavailable, trying CPU', gpuError);
-
+      console.warn('GPU fallback to CPU', gpuError);
       options.baseOptions.delegate = 'CPU';
 
-      landmarker =
-        await vision.FaceLandmarker.createFromOptions(
-          files,
-          options
-        );
+      landmarker = await vision.FaceLandmarker.createFromOptions(
+        files, options
+      );
     }
 
     running = true;
     lastVideoTime = -1;
+    lostFrames = 0;
 
     startBtn.hidden = true;
     switchBtn.hidden = false;
 
-    status('Robot Face AR พร้อมใช้งาน', 'ลองยิ้ม อ้าปาก และกะพริบตา');
+    setStatus('ระบบพร้อมตรวจจับ', 'ลองทำสีหน้าทั้ง 5 แบบ', true);
     frameId = requestAnimationFrame(loop);
 
   } catch (error) {
-    console.error('Robot Face AR error:', error);
-
+    console.error(error);
     running = false;
-    stopCamera();
+    stopStream();
 
     if (landmarker) {
-      try {
-        landmarker.close();
-      } catch (e) {}
+      try { landmarker.close(); } catch (e) {}
       landmarker = null;
     }
 
-    let message = error.message || 'เกิดข้อผิดพลาด';
+    setStatus('เริ่มต้นไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด');
 
-    if (error.name === 'NotAllowedError') {
-      message = 'ไม่สามารถเข้าถึงกล้องได้';
-    } else if (error.name === 'NotFoundError') {
-      message = 'ไม่พบกล้อง';
-    }
-
-    status('เริ่มต้นไม่สำเร็จ', message);
     startBtn.hidden = false;
     switchBtn.hidden = true;
 
@@ -332,295 +536,432 @@ async function startAR() {
   }
 }
 
-function getBlendshape(categories, name) {
+function score(categories, name) {
   if (!categories) return 0;
-
-  const item = categories.find(
-    x => x.categoryName === name
-  );
-
-  return item ? item.score : 0;
+  const found = categories.find(x => x.categoryName === name);
+  return found ? found.score : 0;
 }
 
-function updateFace(result) {
-  const faces = result.faceLandmarks;
+function smooth(key, next, amount = 0.38) {
+  values[key] += (next - values[key]) * amount;
+  return values[key];
+}
 
-  if (!faces || faces.length === 0) {
-    faceVisible = false;
-    return;
-  }
-
-  const points = faces[0];
+function getScreenPoint(p) {
   const W = window.innerWidth;
   const H = window.innerHeight;
 
-  const left = points[234];
-  const right = points[454];
-  const forehead = points[10];
-  const chin = points[152];
-  const leftEye = points[33];
-  const rightEye = points[263];
-
-  if (!left || !right || !forehead || !chin) {
-    faceVisible = false;
-    return;
-  }
-
-  // ปรับพิกัดให้ตรงกับวิดีโอที่กลับด้าน
-  const coverScale = Math.max(
+  const scale = Math.max(
     W / video.videoWidth,
     H / video.videoHeight
   );
 
-  const renderedW = video.videoWidth * coverScale;
-  const renderedH = video.videoHeight * coverScale;
+  const renderedW = video.videoWidth * scale;
+  const renderedH = video.videoHeight * scale;
   const offsetX = (W - renderedW) / 2;
   const offsetY = (H - renderedH) / 2;
 
-  function screenPoint(p) {
-    return {
-      x: offsetX + p.x * renderedW,
-      y: offsetY + p.y * renderedH
-    };
-  }
-
-  const L = screenPoint(left);
-  const R = screenPoint(right);
-  const F = screenPoint(forehead);
-  const C = screenPoint(chin);
-  const E1 = screenPoint(leftEye);
-  const E2 = screenPoint(rightEye);
-
-  faceX = (L.x + R.x) / 2;
-  faceY = (F.y + C.y) / 2;
-  faceW = Math.hypot(R.x - L.x, R.y - L.y) * 1.28;
-  faceH = Math.hypot(C.x - F.x, C.y - F.y) * 1.22;
-
-  faceRoll = Math.atan2(
-    E2.y - E1.y,
-    E2.x - E1.x
-  );
-
-  const categories =
-    result.faceBlendshapes?.[0]?.categories;
-
-  const smile = Math.max(
-    getBlendshape(categories, 'mouthSmileLeft'),
-    getBlendshape(categories, 'mouthSmileRight')
-  );
-
-  const jawOpen = getBlendshape(categories, 'jawOpen');
-
-  const blinkL = getBlendshape(categories, 'eyeBlinkLeft');
-  const blinkR = getBlendshape(categories, 'eyeBlinkRight');
-
-  // ทำให้การเปลี่ยนสีหน้าดูนุ่มนวลขึ้น
-  smileValue += (smile - smileValue) * 0.45;
-  mouthValue += (jawOpen - mouthValue) * 0.5;
-  blinkValue += (Math.max(blinkL, blinkR) - blinkValue) * 0.6;
-
-  faceVisible = true;
-  lastFaceTime = performance.now();
+  // กล้องหน้าแสดงแบบ mirror
+  return {
+    x: offsetX + (1 - p.x) * renderedW,
+    y: offsetY + p.y * renderedH
+  };
 }
 
-function roundedRect(x, y, w, h, r) {
+function analyze(result) {
+  const points = result.faceLandmarks?.[0];
+
+  if (!points || points.length < 455) {
+    lostFrames++;
+
+    if (lostFrames > 5) {
+      face = null;
+      selectState('neutral', 0);
+    }
+    return;
+  }
+
+  lostFrames = 0;
+
+  const left = getScreenPoint(points[234]);
+  const right = getScreenPoint(points[454]);
+  const top = getScreenPoint(points[10]);
+  const chin = getScreenPoint(points[152]);
+  const eyeL = getScreenPoint(points[33]);
+  const eyeR = getScreenPoint(points[263]);
+  const nose = getScreenPoint(points[1]);
+
+  const width = Math.hypot(
+    right.x - left.x,
+    right.y - left.y
+  );
+
+  const height = Math.hypot(
+    chin.x - top.x,
+    chin.y - top.y
+  );
+
+  const categories = result.faceBlendshapes?.[0]?.categories;
+
+  const smileRaw = Math.max(
+    score(categories, 'mouthSmileLeft'),
+    score(categories, 'mouthSmileRight')
+  );
+
+  const openRaw = score(categories, 'jawOpen');
+
+  const blinkRaw = Math.max(
+    score(categories, 'eyeBlinkLeft'),
+    score(categories, 'eyeBlinkRight')
+  );
+
+  const frownRaw = Math.max(
+    score(categories, 'mouthFrownLeft'),
+    score(categories, 'mouthFrownRight')
+  );
+
+  const smile = smooth('smile', smileRaw);
+  const open = smooth('open', openRaw, 0.48);
+  const blink = smooth('blink', blinkRaw, 0.65);
+  const frown = smooth('frown', frownRaw);
+
+  face = {
+    x: nose.x,
+    y: nose.y,
+    width: width * 1.17,
+    height: height * 1.12,
+    roll: Math.atan2(
+      eyeR.y - eyeL.y,
+      eyeR.x - eyeL.x
+    )
+  };
+
+  lastFaceTime = performance.now();
+
+  let nextState = 'neutral';
+  let strength = 0.2;
+
+  // ลำดับนี้ช่วยแยกสีหน้าที่เกิดพร้อมกัน
+  if (blink > 0.56) {
+    nextState = 'blink';
+    strength = blink;
+  } else if (open > 0.48) {
+    nextState = 'open';
+    strength = open;
+  } else if (smile > 0.36) {
+    nextState = 'smile';
+    strength = smile;
+  } else if (frown > 0.38) {
+    nextState = 'frown';
+    strength = frown;
+  }
+
+  selectState(nextState, strength);
+}
+
+const stateLabels = {
+  neutral: 'ปกติ',
+  blink: 'กะพริบตา',
+  open: 'อ้าปาก',
+  smile: 'ยิ้ม',
+  frown: 'หน้าบึ้ง'
+};
+
+function selectState(state, strength) {
+  currentState = state;
+
+  expressionCards.forEach(card => {
+    card.classList.toggle(
+      'active',
+      card.dataset.state === state
+    );
+  });
+
+  expressionText.textContent = 'สถานะ: ' + stateLabels[state];
+
+  confidenceText.textContent = face
+    ? Math.round(Math.max(0, Math.min(1, strength)) * 100) + '%'
+    : 'ไม่พบใบหน้า';
+
+  barFill.style.width = face
+    ? Math.round(Math.max(0, Math.min(1, strength)) * 100) + '%'
+    : '0%';
+}
+
+function roundRect(x, y, w, h, r) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
 }
 
-function drawRobotFace() {
+function drawRobot() {
   const W = window.innerWidth;
   const H = window.innerHeight;
 
   ctx.clearRect(0, 0, W, H);
 
-  if (!faceVisible) {
-    if (performance.now() - lastFaceTime > 250) {
-      return;
-    }
-  }
+  if (!face) return;
 
-  if (faceW <= 0 || faceH <= 0) return;
+  if (performance.now() - lastFaceTime > 500) return;
 
-  // กระจกพิกัดเดียวกับภาพกล้องหน้า
   ctx.save();
-  ctx.translate(W, 0);
-  ctx.scale(-1, 1);
 
-  ctx.translate(faceX, faceY);
-  ctx.rotate(faceRoll);
+  // จุดกำเนิดและขนาดตามใบหน้าที่ตรวจพบ
+  ctx.translate(face.x, face.y);
+  ctx.rotate(face.roll);
 
-  const w = faceW;
-  const h = faceH;
-  const s = w / 240;
+  const scale = face.width / 220;
+  ctx.scale(scale, scale);
 
-  ctx.scale(s, s);
+  const s = currentState;
+  const isBlink = s === 'blink';
+  const isOpen = s === 'open';
+  const isSmile = s === 'smile';
+  const isFrown = s === 'frown';
 
-  // เงาด้านหลังหัว
-  ctx.fillStyle = '#11162b';
-  roundedRect(-126, -146, 252, 292, 28);
+  // เงาเรืองแสง
+  ctx.shadowColor = '#28eaff55';
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = '#11162d';
+  roundRect(-119, -143, 238, 286, 25);
   ctx.fill();
+  ctx.shadowBlur = 0;
 
   // หูหุ่นยนต์
-  ctx.fillStyle = '#278ca5';
-  roundedRect(-145, -65, 22, 100, 7);
+  ctx.fillStyle = '#32d7e4';
+  roundRect(-135, -53, 19, 80, 5);
+  ctx.fill();
+  roundRect(116, -53, 19, 80, 5);
   ctx.fill();
 
-  roundedRect(123, -65, 22, 100, 7);
+  ctx.fillStyle = '#8c65ff';
+  roundRect(-139, -36, 8, 46, 3);
+  ctx.fill();
+  roundRect(131, -36, 8, 46, 3);
   ctx.fill();
 
-  // กรอบหน้า
-  const gradient = ctx.createLinearGradient(-120, -130, 120, 140);
-  gradient.addColorStop(0, '#7253ef');
-  gradient.addColorStop(0.55, '#3c4ed7');
-  gradient.addColorStop(1, '#182b76');
+  // ขอบหัวหลายชั้น
+  const shell = ctx.createLinearGradient(-115, -140, 115, 140);
+  shell.addColorStop(0, '#9d77ff');
+  shell.addColorStop(.45, '#6650e8');
+  shell.addColorStop(1, '#263c99');
 
-  ctx.fillStyle = '#10152b';
-  roundedRect(-128, -148, 256, 296, 27);
+  ctx.fillStyle = '#080d20';
+  roundRect(-120, -145, 240, 290, 23);
   ctx.fill();
 
-  ctx.fillStyle = gradient;
-  roundedRect(-116, -136, 232, 272, 21);
+  ctx.fillStyle = shell;
+  roundRect(-112, -137, 224, 274, 18);
   ctx.fill();
 
-  // หน้าจอด้านใน
-  ctx.fillStyle = '#151c3b';
-  roundedRect(-101, -119, 202, 238, 15);
+  ctx.fillStyle = '#10162d';
+  roundRect(-99, -123, 198, 246, 12);
   ctx.fill();
 
-  // แถบตกแต่ง
-  ctx.fillStyle = '#16e5df';
-  roundedRect(-88, -106, 176, 8, 4);
+  // เส้นกรอบหน้าจอ
+  ctx.strokeStyle = '#29eaf0';
+  ctx.lineWidth = 2;
+  roundRect(-99, -123, 198, 246, 12);
+  ctx.stroke();
+
+  // ไฟด้านบน
+  ctx.fillStyle = '#21e6ee';
+  roundRect(-68, -113, 136, 5, 2.5);
   ctx.fill();
 
-  // สีหน้ากำหนดจากการตรวจจับจริง
-  const isBlinking = blinkValue > 0.53;
-  const isSmiling = smileValue > 0.34;
-  const isSurprised = mouthValue > 0.48;
+  ctx.fillStyle = '#a984ff';
+  ctx.beginPath();
+  ctx.arc(-78, -110.5, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(78, -110.5, 3, 0, Math.PI * 2);
+  ctx.fill();
 
   // ดวงตา
-  const eyeY = -38;
-  const eyeW = 65;
-  const eyeH = isBlinking ? 8 : 57;
+  const eyeY = -39;
+  const eyeW = 58;
+  const eyeH = isBlink ? 7 : 52;
 
-  for (const eyeX of [-68, 68]) {
-    ctx.fillStyle = '#080d20';
-    roundedRect(
+  for (const eyeX of [-57, 57]) {
+    ctx.fillStyle = '#060a19';
+    roundRect(
       eyeX - eyeW / 2 - 5,
       eyeY - eyeH / 2 - 5,
       eyeW + 10,
       eyeH + 10,
-      12
-    );
-    ctx.fill();
-
-    ctx.fillStyle = isBlinking ? '#3f6d91' : '#24e8ee';
-    roundedRect(
-      eyeX - eyeW / 2,
-      eyeY - eyeH / 2,
-      eyeW,
-      eyeH,
       9
     );
     ctx.fill();
 
-    if (!isBlinking) {
-      ctx.fillStyle = '#fff';
-      roundedRect(
-        eyeX - 17,
-        eyeY - 15,
-        15,
-        13,
-        4
+    if (isBlink) {
+      ctx.fillStyle = '#26edf0';
+      roundRect(eyeX - 24, eyeY - 3, 48, 6, 3);
+      ctx.fill();
+
+      ctx.strokeStyle = '#9cffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(eyeX - 19, eyeY - 7);
+      ctx.lineTo(eyeX + 19, eyeY - 7);
+      ctx.stroke();
+    } else {
+      const eyeGradient = ctx.createLinearGradient(
+        eyeX, eyeY - eyeH / 2,
+        eyeX, eyeY + eyeH / 2
+      );
+
+      eyeGradient.addColorStop(0, '#74ffff');
+      eyeGradient.addColorStop(.55, '#20dce9');
+      eyeGradient.addColorStop(1, '#3488f9');
+
+      ctx.fillStyle = eyeGradient;
+      roundRect(
+        eyeX - eyeW / 2,
+        eyeY - eyeH / 2,
+        eyeW,
+        eyeH,
+        7
       );
       ctx.fill();
 
-      ctx.fillStyle = '#127dba';
-      roundedRect(
-        eyeX - 10,
-        eyeY + 9,
-        21,
-        16,
-        5
-      );
+      // รูม่านตาเปลี่ยนตามสีหน้า
+      ctx.fillStyle = '#13376b';
+
+      if (isFrown) {
+        ctx.fillRect(eyeX - 15, eyeY - 2, 30, 17);
+      } else {
+        roundRect(eyeX - 14, eyeY - 8, 28, 25, 5);
+        ctx.fill();
+      }
+
+      // ไฮไลต์
+      ctx.fillStyle = '#ffffff';
+      roundRect(eyeX - 18, eyeY - 17, 13, 9, 3);
       ctx.fill();
-    } else {
-      ctx.fillStyle = '#a2ffff';
-      ctx.fillRect(eyeX - 25, eyeY - 2, 50, 4);
+
+      ctx.fillStyle = '#93ffff';
+      roundRect(eyeX + 7, eyeY + 8, 7, 7, 2);
+      ctx.fill();
     }
   }
 
-  // จมูก
-  ctx.fillStyle = '#ffbd69';
+  // คิ้ว
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = isFrown ? '#ffbd69' : '#8f7bff';
+
   ctx.beginPath();
-  ctx.arc(0, 30, 8, 0, Math.PI * 2);
-  ctx.fill();
-
-  // ปากเปลี่ยนตามการอ้าปากและยิ้ม
-  const mouthY = 78;
-  const mouthWidth = 88 + smileValue * 30;
-  const mouthHeight = isSurprised
-    ? 46 + mouthValue * 23
-    : 13 + smileValue * 22;
-
-  ctx.fillStyle = '#080d20';
-  ctx.beginPath();
-
-  if (isSmiling && !isSurprised) {
-    ctx.moveTo(-mouthWidth / 2, mouthY - 5);
-    ctx.quadraticCurveTo(
-      0,
-      mouthY + mouthHeight * 2.2,
-      mouthWidth / 2,
-      mouthY - 5
-    );
-    ctx.quadraticCurveTo(
-      0,
-      mouthY + mouthHeight * 2.7,
-      -mouthWidth / 2,
-      mouthY - 5
-    );
-  } else if (isSurprised) {
-    ctx.ellipse(
-      0,
-      mouthY,
-      mouthWidth * 0.32,
-      mouthHeight * 0.65,
-      0,
-      0,
-      Math.PI * 2
-    );
+  if (isFrown) {
+    ctx.moveTo(-86, -77);
+    ctx.lineTo(-30, -67);
+    ctx.moveTo(30, -67);
+    ctx.lineTo(86, -77);
   } else {
-    ctx.ellipse(
-      0,
-      mouthY,
-      mouthWidth / 2,
-      mouthHeight / 2,
-      0,
-      0,
-      Math.PI * 2
-    );
+    ctx.moveTo(-84, -72);
+    ctx.lineTo(-34, -72);
+    ctx.moveTo(34, -72);
+    ctx.lineTo(84, -72);
   }
+  ctx.stroke();
 
+  // จมูกเป็นเซนเซอร์
+  const noseColor = isOpen ? '#ffca72' : '#b58cff';
+  ctx.fillStyle = noseColor;
+  ctx.shadowColor = noseColor;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(0, 24, 7, 0, Math.PI * 2);
   ctx.fill();
+  ctx.shadowBlur = 0;
 
-  // ฟันเมื่อยิ้ม
-  if (isSmiling && !isSurprised) {
-    ctx.fillStyle = '#fff';
-    roundedRect(-30, mouthY - 2, 60, 10, 4);
+  // ปาก: วาดรูปทรงต่างกันทั้ง 5 สถานะ
+  const mouthY = 71;
+
+  if (isOpen) {
+    ctx.fillStyle = '#030612';
+    ctx.beginPath();
+    ctx.ellipse(0, mouthY, 26, 28, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#ffca72';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.fillStyle = '#ff6fae';
+    ctx.beginPath();
+    ctx.ellipse(0, mouthY + 15, 13, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+  } else if (isSmile) {
+    ctx.fillStyle = '#030612';
+    ctx.beginPath();
+    ctx.moveTo(-46, mouthY - 9);
+    ctx.quadraticCurveTo(0, mouthY + 43, 46, mouthY - 9);
+    ctx.quadraticCurveTo(0, mouthY + 19, -46, mouthY - 9);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(-32, mouthY - 3);
+    ctx.quadraticCurveTo(0, mouthY + 17, 32, mouthY - 3);
+    ctx.lineTo(26, mouthY + 7);
+    ctx.quadraticCurveTo(0, mouthY + 20, -26, mouthY + 7);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = '#21e8f0';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-47, mouthY - 8);
+    ctx.quadraticCurveTo(0, mouthY + 43, 47, mouthY - 8);
+    ctx.stroke();
+
+  } else if (isFrown) {
+    ctx.strokeStyle = '#ff829c';
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.moveTo(-39, mouthY + 13);
+    ctx.quadraticCurveTo(0, mouthY - 21, 39, mouthY + 13);
+    ctx.stroke();
+
+  } else {
+    ctx.strokeStyle = '#27e9ee';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(-34, mouthY);
+    ctx.lineTo(34, mouthY);
+    ctx.stroke();
+
+    ctx.fillStyle = '#8c65ff';
+    roundRect(-27, mouthY - 3, 54, 6, 3);
     ctx.fill();
   }
 
-  // ไฟสถานะ
-  ctx.fillStyle = isSmiling
-    ? '#5bff9d'
-    : isSurprised
-      ? '#ffbd69'
-      : '#20e4ff';
+  // ไฟสถานะใต้ปาก
+  const ledColor = isSmile
+    ? '#4bffac'
+    : isOpen
+      ? '#ffca72'
+      : isFrown
+        ? '#ff6b92'
+        : '#28f0f4';
 
+  ctx.fillStyle = ledColor;
+  ctx.shadowColor = ledColor;
+  ctx.shadowBlur = 12;
   ctx.beginPath();
-  ctx.arc(0, 119, 5, 0, Math.PI * 2);
+  ctx.arc(0, 111, 5, 0, Math.PI * 2);
   ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // สกรูมุมหัว
+  ctx.fillStyle = '#b6c5ff';
+  for (const x of [-101, 101]) {
+    for (const y of [-125, 125]) {
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
   ctx.restore();
 }
@@ -632,24 +973,22 @@ function loop() {
     if (
       landmarker &&
       video.readyState >= 2 &&
-      video.videoWidth > 0
+      video.videoWidth > 0 &&
+      video.currentTime !== lastVideoTime
     ) {
-      if (video.currentTime !== lastVideoTime) {
-        lastVideoTime = video.currentTime;
+      lastVideoTime = video.currentTime;
 
-        const result = landmarker.detectForVideo(
-          video,
-          performance.now()
-        );
+      const result = landmarker.detectForVideo(
+        video,
+        performance.now()
+      );
 
-        lastResult = result;
-        updateFace(result);
-      }
-
-      drawRobotFace();
+      analyze(result);
     }
+
+    drawRobot();
   } catch (error) {
-    console.error('Face tracking error:', error);
+    console.error('Tracking error:', error);
   }
 
   frameId = requestAnimationFrame(loop);
@@ -662,7 +1001,6 @@ async function switchCamera() {
     facingMode === 'user' ? 'environment' : 'user';
 
   stopAR();
-
   startBtn.hidden = false;
   switchBtn.hidden = true;
 
@@ -675,16 +1013,12 @@ switchBtn.addEventListener('click', switchCamera);
 window.addEventListener('pagehide', () => {
   running = false;
 
-  if (frameId) {
-    cancelAnimationFrame(frameId);
-  }
+  if (frameId) cancelAnimationFrame(frameId);
 
-  stopCamera();
+  stopStream();
 
   if (landmarker) {
-    try {
-      landmarker.close();
-    } catch (e) {}
+    try { landmarker.close(); } catch (e) {}
   }
 });
 </script>
