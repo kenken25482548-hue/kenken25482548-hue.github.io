@@ -69,9 +69,7 @@ button {
   color: #171923;
 }
 
-button:disabled {
-  opacity: .6;
-}
+button:disabled { opacity: .6; }
 
 #panel {
   position: fixed;
@@ -101,9 +99,7 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
-[hidden] {
-  display: none !important;
-}
+[hidden] { display: none !important; }
 </style>
 </head>
 
@@ -135,8 +131,9 @@ const MODEL_URL = new URL(
   window.location.href
 ).href;
 
-// ใช้ URL เต็มและ CDN ที่จัดการ dependencies ของ Three.js
-const THREE_URL = 'https://esm.sh/three@0.160.0';
+const THREE_URL =
+  'https://esm.sh/three@0.160.0';
+
 const GLTF_URL =
   'https://esm.sh/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
@@ -234,7 +231,6 @@ async function startCamera() {
 
     stopStream();
 
-    // เรียกกล้องจากการกดปุ่มโดยตรง
     setStatus(
       'กำลังขออนุญาตกล้อง',
       'กรุณารอให้กล้องเริ่มทำงาน'
@@ -252,10 +248,7 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
 
-    setStatus(
-      'เปิดกล้องสำเร็จ',
-      'กำลังโหลดระบบ 3D'
-    );
+    setStatus('เปิดกล้องสำเร็จ', 'กำลังโหลดระบบ 3D');
 
     await initThree();
     await initFaceDetection();
@@ -311,12 +304,8 @@ async function startCamera() {
 async function initThree() {
   if (renderer && robot) return;
 
-  setStatus(
-    'กำลังโหลด Three.js',
-    'กำลังดาวน์โหลดไลบรารี 3D'
-  );
+  setStatus('กำลังโหลด Three.js', 'กำลังดาวน์โหลดไลบรารี 3D');
 
-  // ไม่มี import('three') แบบชื่อเปล่า
   const [threeModule, loaderModule] = await Promise.all([
     import(THREE_URL),
     import(GLTF_URL)
@@ -355,24 +344,14 @@ async function initThree() {
     camera.lookAt(0, 0, 0);
 
     scene.add(
-      new THREE.HemisphereLight(
-        0xffffff,
-        0x555577,
-        2
-      )
+      new THREE.HemisphereLight(0xffffff, 0x555577, 2)
     );
 
-    const keyLight = new THREE.DirectionalLight(
-      0xffffff,
-      2.5
-    );
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
     keyLight.position.set(1, 2, 5);
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(
-      0xffffff,
-      1.2
-    );
+    const fillLight = new THREE.DirectionalLight(0xffffff, 1.2);
     fillLight.position.set(-3, 1, 4);
     scene.add(fillLight);
 
@@ -400,7 +379,12 @@ async function initThree() {
     );
   });
 
+  // ===== แก้เฉพาะการจัดแนวโมเดล =====
   robot = gltf.scene;
+
+  // หมุนโมเดลจาก Z-up ไปเป็น Y-up ก่อนคำนวณขอบเขต
+  robot.rotation.x = -Math.PI / 2;
+  robot.updateMatrixWorld(true);
 
   const bounds = new THREE.Box3().setFromObject(robot);
   const size = new THREE.Vector3();
@@ -415,7 +399,7 @@ async function initThree() {
     throw new Error('ขนาดโมเดล GLB ไม่ถูกต้อง');
   }
 
-  // วางจุดหมุนไว้ตรงกลางโมเดล
+  // จัดจุดหมุนให้อยู่ตรงกลางหลังหมุนโมเดลแล้ว
   robot.position.sub(center);
 
   baseModelSize = maxSize;
@@ -424,6 +408,7 @@ async function initThree() {
 
   scene.add(robot);
   renderer.render(scene, camera);
+  // ===== จบส่วนแก้โมเดล =====
 }
 
 function resizeScene() {
@@ -543,18 +528,15 @@ function updateRobot(points) {
     rightEye.y - leftEye.y
   );
 
-  if (!Number.isFinite(eyeDistance) ||
-      eyeDistance < 0.001) {
+  if (!Number.isFinite(eyeDistance) || eyeDistance < 0.001) {
     return;
   }
 
   const aspect = window.innerWidth / window.innerHeight;
 
-  // ตำแหน่งใบหน้าในภาพที่กลับด้าน
   const targetX = (0.5 - nose.x) * 2 * aspect;
   const targetY = (0.5 - nose.y) * 2;
 
-  // ขนาดตามระยะห่างระหว่างดวงตา
   const targetScale = Math.max(
     0.12,
     Math.min(eyeDistance * 2.5, 1.8)
@@ -609,9 +591,7 @@ switchBtn.addEventListener('click', switchCamera);
 window.addEventListener('pagehide', () => {
   running = false;
 
-  if (frameId) {
-    cancelAnimationFrame(frameId);
-  }
+  if (frameId) cancelAnimationFrame(frameId);
 
   stopStream();
 
@@ -621,9 +601,7 @@ window.addEventListener('pagehide', () => {
     } catch (e) {}
   }
 
-  if (renderer) {
-    renderer.dispose();
-  }
+  if (renderer) renderer.dispose();
 
   if (resizeHandler) {
     window.removeEventListener('resize', resizeHandler);
