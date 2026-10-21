@@ -6,14 +6,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Funny Robot Face AR</title>
 
-<script type="importmap">
-{
-  "imports": {
-    "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm"
-  }
-}
-</script>
-
 <style>
 * { box-sizing: border-box; }
 
@@ -23,7 +15,7 @@ html, body {
   height: 100%;
   overflow: hidden;
   background: #080d18;
-  color: white;
+  color: #fff;
   font-family: Arial, sans-serif;
 }
 
@@ -33,9 +25,7 @@ html, body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-
-  /* แก้ภาพกล้องกลับหัว: ไม่หมุนภาพ */
-  transform: none;
+  transform: scaleX(-1);
 }
 
 #robotCanvas {
@@ -65,7 +55,7 @@ button {
   font-weight: bold;
   font-size: 14px;
   cursor: pointer;
-  color: white;
+  color: #fff;
   background: #1769ff;
 }
 
@@ -74,3 +64,510 @@ button:disabled {
   cursor: wait;
 }
 
+#stopBtn { background: #3b455a; }
+
+.status {
+  padding: 10px 12px;
+  background: #101a2bdd;
+  border: 1px solid #42516b;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+#expression {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  max-width: 90%;
+  padding: 12px 20px;
+  border-radius: 16px;
+  background: #101a2be8;
+  border: 1px solid #4f86ff;
+  font-size: 20px;
+  font-weight: bold;
+  text-align: center;
+  white-space: nowrap;
+}
+
+#help {
+  position: fixed;
+  z-index: 5;
+  bottom: 76px;
+  left: 12px;
+  right: 12px;
+  color: #d4def5;
+  font-size: 12px;
+  text-align: center;
+  text-shadow: 0 1px 4px #000;
+}
+
+@media (max-width: 500px) {
+  .panel { gap: 6px; }
+  button { padding: 11px 12px; }
+  .status { font-size: 11px; }
+}
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "@mediapipe/tasks-vision":
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm"
+  }
+}
+</script>
+</head>
+
+<body>
+<video id="camera" autoplay playsinline muted></video>
+<canvas id="robotCanvas"></canvas>
+
+<div class="panel">
+  <button id="startBtn">📷 เปิดกล้อง</button>
+  <button id="stopBtn">ปิดกล้อง</button>
+  <div class="status" id="status">พร้อมเริ่มต้น</div>
+</div>
+
+<div id="help">
+  ลองทำหน้าเฉย ๆ กะพริบตา อ้าปาก ยิ้ม และกดคิ้วพร้อมทำมุมปากตก
+</div>
+<div id="expression">🤖 รอเปิดกล้อง</div>
+
+<script type="module">
+import {
+  FaceLandmarker,
+  FilesetResolver
+} from "@mediapipe/tasks-vision";
+
+const video = document.getElementById("camera");
+const canvas = document.getElementById("robotCanvas");
+const ctx = canvas.getContext("2d");
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+const statusEl = document.getElementById("status");
+const expressionEl = document.getElementById("expression");
+
+let stream = null;
+let landmarker = null;
+let running = false;
+let rafId = 0;
+let lastVideoTime = -1;
+let currentState = "neutral";
+let smoothed = {};
+let lastExpressionTime = 0;
+
+const labels = {
+  neutral: "😐 หน้าปกติ",
+  blink: "😉 กะพริบตา",
+  open: "😮 อ้าปาก",
+  smile: "😄 ยิ้ม",
+  frown: "😠 หน้าบึ้ง"
+};
+
+function resizeCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(innerWidth * dpr);
+  canvas.height = Math.round(innerHeight * dpr);
+  canvas.style.width = innerWidth + "px";
+  canvas.style.height = innerHeight + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+function clamp(v, min = 0, max = 1) {
+  return Math.max(min, Math.min(max, v || 0));
+}
+
+function smooth(key, value, factor = 0.35) {
+  value = clamp(value);
+  smoothed[key] = smoothed[key] === undefined
+    ? value
+    : smoothed[key] * (1 - factor) + value * factor;
+  return smoothed[key];
+}
+
+function getScore(categories, name) {
+  const item = categories.find(c => c.categoryName === name);
+  return item ? item.score : 0;
+}
+
+function analyze(result) {
+  const categories = result.faceBlendshapes?.[0]?.categories || [];
+
+  const smileRaw = Math.max(
+    getScore(categories, "mouthSmileLeft"),
+    getScore(categories, "mouthSmileRight")
+  );
+
+  const openRaw = getScore(categories, "jawOpen");
+
+  const blinkRaw = Math.max(
+    getScore(categories, "eyeBlinkLeft"),
+    getScore(categories, "eyeBlinkRight")
+  );
+
+  // ตรวจหน้าบึ้งจากหลายสัญญาณร่วมกัน
+  const browDown = Math.max(
+    getScore(categories, "browDownLeft"),
+    getScore(categories, "browDownRight")
+  );
+
+  const mouthFrown = Math.max(
+    getScore(categories, "mouthFrownLeft"),
+    getScore(categories, "mouthFrownRight")
+  );
+
+  const mouthPress = Math.max(
+    getScore(categories, "mouthPressLeft"),
+    getScore(categories, "mouthPressRight")
+  );
+
+  // กดคิ้วลงช่วยตรวจจับได้ แม้โมเดลไม่ให้คะแนน mouthFrown สูง
+  const frownRaw = clamp(
+    Math.max(
+      mouthFrown,
+      browDown * 0.85,
+      mouthPress * 0.65
+    )
+  );
+
+  const smile = smooth("smile", smileRaw, 0.40);
+  const open = smooth("open", openRaw, 0.45);
+  const blink = smooth("blink", blinkRaw, 0.65);
+  const frown = smooth("frown", frownRaw, 0.45);
+  const brows = smooth("brows", browDown, 0.40);
+
+  let nextState = "neutral";
+
+  // แยกหน้าบึ้งออกจากรอยยิ้มก่อน
+  if (frown > 0.23 && smile < 0.48 &&
+      (brows > 0.16 || mouthFrown > 0.12 || mouthPress > 0.18)) {
+    nextState = "frown";
+  } else if (blink > 0.58) {
+    nextState = "blink";
+  } else if (open > 0.48) {
+    nextState = "open";
+  } else if (smile > 0.42) {
+    nextState = "smile";
+  }
+
+  // หน่วงการเปลี่ยนสถานะเล็กน้อย ลดการสลับสีหน้ารัว ๆ
+  const now = performance.now();
+  if (nextState !== currentState) {
+    if (nextState === "neutral" || nextState === "blink") {
+      currentState = nextState;
+      lastExpressionTime = now;
+    } else if (now - lastExpressionTime > 100) {
+      currentState = nextState;
+      lastExpressionTime = now;
+    }
+  } else {
+    lastExpressionTime = now;
+  }
+
+  expressionEl.textContent = labels[currentState];
+
+  statusEl.textContent =
+    `คิ้ว ${brows.toFixed(2)} | มุมปากตก ${mouthFrown.toFixed(2)} | ${labels[currentState]}`;
+}
+
+function roundedRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+}
+
+function drawRobot() {
+  const w = innerWidth;
+  const h = innerHeight;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // ตำแหน่งหุ่นยนต์อยู่กลางจอ
+  const cx = w / 2;
+  const cy = h * 0.48;
+  const size = Math.min(w * 0.64, h * 0.54, 360);
+  const rw = size;
+  const rh = size * 0.82;
+  const x = cx - rw / 2;
+  const y = cy - rh / 2;
+
+  ctx.save();
+
+  // เงาเรืองแสง
+  ctx.shadowColor = "#1f8fff";
+  ctx.shadowBlur = 30;
+
+  const gradient = ctx.createLinearGradient(x, y, x + rw, y + rh);
+  gradient.addColorStop(0, "#263d65");
+  gradient.addColorStop(0.5, "#111d34");
+  gradient.addColorStop(1, "#263d65");
+
+  roundedRect(x, y, rw, rh, size * 0.14);
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = Math.max(3, size * 0.018);
+  ctx.strokeStyle = "#59c8ff";
+  ctx.stroke();
+
+  // หูหุ่นยนต์
+  ctx.fillStyle = "#46bfff";
+  roundedRect(x - size * .075, cy - size * .12,
+              size * .08, size * .24, size * .035);
+  ctx.fill();
+  roundedRect(x + rw - size * .005, cy - size * .12,
+              size * .08, size * .24, size * .035);
+  ctx.fill();
+
+  // หน้าจอ
+  const pad = size * .12;
+  const fx = x + pad;
+  const fy = y + pad;
+  const fw = rw - pad * 2;
+  const fh = rh - pad * 2;
+
+  roundedRect(fx, fy, fw, fh, size * .09);
+  ctx.fillStyle = "#07111f";
+  ctx.fill();
+
+  ctx.strokeStyle = "#224f79";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // ตา
+  const eyeY = fy + fh * .34;
+  const eyeGap = fw * .27;
+  const eyeX1 = cx - eyeGap / 2;
+  const eyeX2 = cx + eyeGap / 2;
+  const eyeR = size * .055;
+
+  ctx.fillStyle = "#57e7ff";
+  ctx.shadowColor = "#30cfff";
+  ctx.shadowBlur = 15;
+
+  if (currentState === "blink") {
+    ctx.lineWidth = size * .025;
+    ctx.strokeStyle = "#57e7ff";
+    ctx.beginPath();
+    ctx.moveTo(eyeX1 - eyeR, eyeY);
+    ctx.lineTo(eyeX1 + eyeR, eyeY);
+    ctx.moveTo(eyeX2 - eyeR, eyeY);
+    ctx.lineTo(eyeX2 + eyeR, eyeY);
+    ctx.stroke();
+  } else {
+    for (const ex of [eyeX1, eyeX2]) {
+      ctx.beginPath();
+
+      if (currentState === "frown") {
+        // ตาแคบลงเมื่อหน้าบึ้ง
+        ctx.ellipse(ex, eyeY, eyeR * 1.1, eyeR * .7, 0, 0,
+                    Math.PI * 2);
+      } else if (currentState === "smile") {
+        ctx.ellipse(ex, eyeY, eyeR, eyeR * .72, 0, 0,
+                    Math.PI * 2);
+      } else {
+        ctx.arc(ex, eyeY, eyeR, 0, Math.PI * 2);
+      }
+
+      ctx.fill();
+    }
+  }
+
+  ctx.shadowBlur = 0;
+
+  // คิ้ว
+  const browY = eyeY - size * .10;
+  ctx.lineWidth = size * .018;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#79edff";
+
+  ctx.beginPath();
+
+  if (currentState === "frown") {
+    // หัวคิ้วเอียงเข้าหากัน ให้เห็นอารมณ์หน้าบึ้งชัดเจน
+    ctx.moveTo(eyeX1 - eyeR, browY - size * .005);
+    ctx.lineTo(eyeX1 + eyeR, browY + size * .045);
+
+    ctx.moveTo(eyeX2 - eyeR, browY + size * .045);
+    ctx.lineTo(eyeX2 + eyeR, browY - size * .005);
+  } else if (currentState === "smile") {
+    ctx.moveTo(eyeX1 - eyeR, browY + size * .02);
+    ctx.lineTo(eyeX1 + eyeR, browY);
+    ctx.moveTo(eyeX2 - eyeR, browY);
+    ctx.lineTo(eyeX2 + eyeR, browY + size * .02);
+  } else {
+    ctx.moveTo(eyeX1 - eyeR, browY);
+    ctx.lineTo(eyeX1 + eyeR, browY);
+    ctx.moveTo(eyeX2 - eyeR, browY);
+    ctx.lineTo(eyeX2 + eyeR, browY);
+  }
+
+  ctx.stroke();
+
+  // ปาก
+  const mx = cx;
+  const my = fy + fh * .70;
+  const mw = fw * .28;
+
+  ctx.strokeStyle = "#58eaff";
+  ctx.fillStyle = "#58eaff";
+  ctx.lineWidth = size * .025;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = "#27bfff";
+  ctx.shadowBlur = 12;
+
+  ctx.beginPath();
+
+  if (currentState === "smile") {
+    ctx.moveTo(mx - mw / 2, my - size * .015);
+    ctx.quadraticCurveTo(mx, my + size * .14, mx + mw / 2,
+                         my - size * .015);
+    ctx.stroke();
+  } else if (currentState === "frown") {
+    // มุมปากทั้งสองข้างตก
+    ctx.moveTo(mx - mw / 2, my + size * .055);
+    ctx.quadraticCurveTo(mx, my - size * .09,
+                         mx + mw / 2, my + size * .055);
+    ctx.stroke();
+  } else if (currentState === "open") {
+    ctx.beginPath();
+    ctx.ellipse(mx, my, mw * .40, size * .09, 0, 0,
+                Math.PI * 2);
+    ctx.fill();
+  } else if (currentState === "blink") {
+    ctx.moveTo(mx - mw * .35, my);
+    ctx.lineTo(mx + mw * .35, my);
+    ctx.stroke();
+  } else {
+    ctx.moveTo(mx - mw * .40, my);
+    ctx.lineTo(mx + mw * .40, my);
+    ctx.stroke();
+  }
+
+  ctx.shadowBlur = 0;
+
+  // จุดตกแต่งบนหน้าจอ
+  ctx.fillStyle = "#48bfff";
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.arc(fx + fw * .39 + i * fw * .11,
+            fy + fh * .89, size * .008, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+async function startCamera() {
+  if (running) return;
+
+  startBtn.disabled = true;
+  statusEl.textContent = "กำลังเปิดกล้อง...";
+
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("ต้องเปิดเว็บผ่าน HTTPS หรือ localhost");
+    }
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: "user",
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    });
+
+    video.srcObject = stream;
+    await video.play();
+
+    statusEl.textContent = "กำลังโหลดระบบตรวจจับใบหน้า...";
+
+    if (!landmarker) {
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+
+      landmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        numFaces: 1,
+        outputFaceBlendshapes: true
+      });
+    }
+
+    running = true;
+    lastVideoTime = -1;
+    smoothed = {};
+    currentState = "neutral";
+    statusEl.textContent = "เปิดกล้องแล้ว";
+    expressionEl.textContent = labels.neutral;
+    loop();
+  } catch (error) {
+    console.error(error);
+    stopCamera();
+    statusEl.textContent = "เปิดกล้องไม่สำเร็จ";
+    expressionEl.textContent = "⚠️ " + (error.message || "เกิดข้อผิดพลาด");
+  } finally {
+    startBtn.disabled = false;
+  }
+}
+
+function loop() {
+  if (!running) return;
+
+  if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+
+    try {
+      const result = landmarker.detectForVideo(video, performance.now());
+
+      if (result.faceLandmarks?.length) {
+        analyze(result);
+      } else {
+        currentState = "neutral";
+        expressionEl.textContent = "🤖 ไม่พบใบหน้า";
+      }
+    } catch (error) {
+      console.error("Face detection error:", error);
+    }
+  }
+
+  drawRobot();
+  rafId = requestAnimationFrame(loop);
+}
+
+function stopCamera() {
+  running = false;
+  cancelAnimationFrame(rafId);
+
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+
+  video.srcObject = null;
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+  statusEl.textContent = "ปิดกล้องแล้ว";
+  expressionEl.textContent = "🤖 รอเปิดกล้อง";
+  startBtn.disabled = false;
+}
+
+startBtn.addEventListener("click", startCamera);
+stopBtn.addEventListener("click", stopCamera);
+
+window.addEventListener("beforeunload", stopCamera);
+</script>
+</body>
+</html>
+```
