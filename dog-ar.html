@@ -1,303 +1,299 @@
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="th">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>DOG AR - 3D Puppy</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DOG AR</title>
 
-  <!-- A-Frame และ MindAR -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<style>
+* { box-sizing: border-box; }
 
-  <style>
-    * {
-      box-sizing: border-box;
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #171923;
+  font-family: Arial, Tahoma, sans-serif;
+}
+
+a-scene {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.header {
+  position: fixed;
+  top: env(safe-area-inset-top, 10px);
+  left: 0;
+  width: 100%;
+  padding: 14px;
+  color: white;
+  text-align: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.header h1 {
+  margin: 0 0 6px;
+  color: #ffbd69;
+  font-size: 25px;
+}
+
+.header p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.back {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 80px);
+  left: 12px;
+  z-index: 20;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 15px;
+  background: #ffbd69;
+  color: #222;
+  font-weight: bold;
+}
+
+.status {
+  position: fixed;
+  z-index: 10;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 15px);
+  left: 4%;
+  width: 92%;
+  padding: 15px;
+  border: 1px solid #ffffff35;
+  border-radius: 18px;
+  background: #171923ed;
+  color: white;
+  text-align: center;
+  pointer-events: none;
+}
+
+#message {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+#detail {
+  margin: 0;
+  color: #d9dce6;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.marker-link {
+  position: fixed;
+  z-index: 10;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 115px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 9px 13px;
+  border-radius: 10px;
+  color: white;
+  background: #171923df;
+  text-decoration: none;
+  font-size: 13px;
+  white-space: nowrap;
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/aframe@1.6.0/dist/aframe-master.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.8/aframe/build/aframe-ar.js"></script>
+
+<script>
+AFRAME.registerComponent('fit-dog', {
+  init: function () {
+    this.el.addEventListener('model-loaded', (event) => {
+      const model = event.detail.model;
+      const THREE = AFRAME.THREE;
+
+      model.updateMatrixWorld(true);
+
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+
+      if (!Number.isFinite(size.y) || size.y <= 0) {
+        console.error('Invalid dog model size', size);
+        return;
+      }
+
+      const targetHeight = 1.5;
+      const scale = targetHeight / size.y;
+
+      model.position.set(-center.x, -box.min.y, -center.z);
+      this.el.object3D.scale.setScalar(scale);
+      this.el.object3D.updateMatrixWorld(true);
+
+      this.el.emit('dog-model-ready');
+      console.log('Dog model size:', size);
+      console.log('Dog model scale:', scale);
+    });
+  }
+});
+
+AFRAME.registerComponent('play-dog-animation', {
+  init: function () {
+    this.mixer = null;
+
+    this.el.addEventListener('model-loaded', (event) => {
+      const model = event.detail.model;
+
+      if (model.animations && model.animations.length > 0) {
+        this.mixer = new AFRAME.THREE.AnimationMixer(model);
+        this.mixer.clipAction(model.animations[0]).play();
+      }
+    });
+  },
+
+  tick: function (time, delta) {
+    if (this.mixer) {
+      this.mixer.update(delta / 1000);
     }
-
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #171923;
-      color: #fff;
-      font-family: Arial, Tahoma, sans-serif;
-    }
-
-    /* ฉากเต็มหน้าจอ ปล่อยให้ MindAR จัดการ video/canvas */
-    a-scene {
-      position: fixed !important;
-      inset: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-      z-index: 1;
-    }
-
-    .header {
-      position: fixed;
-      top: env(safe-area-inset-top, 0px);
-      left: 0;
-      width: 100%;
-      padding: 14px 10px;
-      text-align: center;
-      z-index: 10;
-      pointer-events: none;
-      background: linear-gradient(#17192399, transparent);
-    }
-
-    .header h1 {
-      margin: 0 0 5px;
-      color: #ffbd69;
-      font-size: 25px;
-    }
-
-    .header p {
-      margin: 0;
-      font-size: 14px;
-    }
-
-    .back {
-      position: fixed;
-      z-index: 20;
-      top: calc(env(safe-area-inset-top, 0px) + 82px);
-      left: 12px;
-      padding: 12px 15px;
-      border: none;
-      border-radius: 12px;
-      background: #ffbd69;
-      color: #222;
-      font-weight: bold;
-      font-size: 14px;
-    }
-
-    .status {
-      position: fixed;
-      z-index: 10;
-      left: 4%;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 15px);
-      width: 92%;
-      padding: 15px;
-      text-align: center;
-      border: 1px solid #ffffff30;
-      border-radius: 18px;
-      background: rgba(20, 22, 34, .94);
-      pointer-events: none;
-    }
-
-    #message {
-      margin: 0 0 6px;
-      font-size: 16px;
-      font-weight: bold;
-    }
-
-    #detail {
-      margin: 0;
-      color: #d9dce6;
-      font-size: 12px;
-      line-height: 1.6;
-      overflow-wrap: anywhere;
-    }
-  </style>
+  }
+});
+</script>
 </head>
 
 <body>
-  <header class="header">
-    <h1>🐶 DOG AR</h1>
-    <p>ส่องรูปหมาเพื่อดูโมเดล 3D</p>
-  </header>
+<header class="header">
+  <h1>🐶 DOG AR</h1>
+  <p>ส่องกล้องไปที่ Marker เพื่อดูหมา 3D</p>
+</header>
 
-  <button class="back" onclick="location.href='./index.html'">
-    ← กลับหน้าหลัก
-  </button>
+<button class="back" onclick="location.href='./index.html'">
+  ← กลับหน้าหลัก
+</button>
 
-  <div class="status">
-    <p id="message">กำลังเริ่มระบบ AR...</p>
-    <p id="detail">อนุญาตการใช้กล้องและรอสักครู่</p>
-  </div>
+<a class="marker-link"
+   href="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/HIRO.jpg"
+   target="_blank" rel="noopener">
+   เปิดรูป Hiro Marker
+</a>
 
-  <a-scene
-    mindar-image="
-      imageTargetSrc: ./targets.mind;
-      autoStart: true;
-      uiLoading: no;
-      uiScanning: no;
-      uiError: no;
-    "
-    color-space="sRGB"
-    renderer="colorManagement: true; alpha: true"
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false">
+<div class="status">
+  <p id="message">กำลังเริ่มกล้อง...</p>
+  <p id="detail">กรุณาอนุญาตให้เว็บไซต์ใช้กล้อง</p>
+</div>
 
-    <a-assets timeout="30000">
-      <a-asset-item
-        id="dogModel"
-        src="./dog_puppy.glb">
-      </a-asset-item>
-    </a-assets>
+<a-scene
+  embedded
+  vr-mode-ui="enabled: false"
+  loading-screen="enabled: false"
+  renderer="alpha: true; antialias: true; colorManagement: true"
+  arjs="sourceType: webcam; debugUIEnabled: false;">
 
-    <a-camera
-      position="0 0 0"
-      look-controls="enabled: false">
-    </a-camera>
+  <a-assets timeout="30000">
+    <a-asset-item
+      id="dogModel"
+      src="./dog_puppy.glb">
+    </a-asset-item>
+  </a-assets>
 
-    <!-- โมเดลจะปรากฏเฉพาะเมื่อพบ Tracker -->
+  <a-marker
+    id="hiroMarker"
+    preset="hiro"
+    smooth="true"
+    smoothCount="5"
+    smoothTolerance=".01"
+    smoothThreshold="2">
+
     <a-entity
-      id="dogTarget"
-      mindar-image-target="targetIndex: 0">
-
-      <a-entity id="dogPlacement" visible="false">
-        <a-gltf-model
-          id="dog"
-          src="#dogModel"
-          position="0 0 0"
-          rotation="0 0 0"
-          scale="1 1 1">
-        </a-gltf-model>
-      </a-entity>
-
+      id="dog"
+      gltf-model="#dogModel"
+      fit-dog
+      play-dog-animation>
     </a-entity>
-  </a-scene>
 
-  <script>
-    const scene = document.querySelector('a-scene');
-    const target = document.querySelector('#dogTarget');
-    const dog = document.querySelector('#dog');
-    const placement = document.querySelector('#dogPlacement');
-    const message = document.querySelector('#message');
-    const detail = document.querySelector('#detail');
+  </a-marker>
 
-    let arReady = false;
-    let modelReady = false;
-    let targetFound = false;
-    let modelFitted = false;
+  <a-entity camera></a-entity>
+</a-scene>
 
-    function status(title, description) {
-      message.textContent = title;
-      detail.textContent = description;
+<script>
+const message = document.getElementById('message');
+const detail = document.getElementById('detail');
+const marker = document.getElementById('hiroMarker');
+const dog = document.getElementById('dog');
+
+let modelReady = false;
+let markerFound = false;
+let cameraReady = false;
+
+function updateStatus() {
+  if (!cameraReady) {
+    message.textContent = 'กำลังเปิดกล้อง...';
+    detail.textContent = 'อนุญาตสิทธิ์กล้องในเบราว์เซอร์';
+  } else if (!modelReady) {
+    message.textContent = 'กล้องทำงานแล้ว';
+    detail.textContent = 'กำลังโหลดโมเดลหมา 3D';
+  } else if (markerFound) {
+    message.textContent = '🐶 พบ Marker แล้ว!';
+    detail.textContent = 'โมเดลหมาควรแสดงอยู่บนรูป Hiro';
+  } else {
+    message.textContent = 'กล้องพร้อมแล้ว';
+    detail.textContent = 'ส่องกล้องไปที่รูป Hiro Marker';
+  }
+}
+
+dog.addEventListener('model-loaded', () => {
+  modelReady = true;
+  updateStatus();
+});
+
+dog.addEventListener('model-error', (event) => {
+  message.textContent = 'โหลดโมเดลหมาไม่สำเร็จ';
+  detail.textContent = 'ตรวจสอบไฟล์ dog_puppy.glb';
+  console.error('DOG MODEL ERROR', event);
+});
+
+marker.addEventListener('markerFound', () => {
+  markerFound = true;
+  updateStatus();
+});
+
+marker.addEventListener('markerLost', () => {
+  markerFound = false;
+  updateStatus();
+});
+
+document.querySelector('a-scene').addEventListener('loaded', () => {
+  console.log('A-Frame scene loaded');
+});
+
+let cameraCheckCount = 0;
+
+const cameraCheck = setInterval(() => {
+  const video = document.querySelector('video');
+
+  if (video && video.srcObject && video.readyState >= 2) {
+    cameraReady = true;
+    clearInterval(cameraCheck);
+    updateStatus();
+    console.log('CAMERA VIDEO READY');
+  }
+
+  cameraCheckCount++;
+
+  if (cameraCheckCount >= 30) {
+    clearInterval(cameraCheck);
+
+    if (!cameraReady) {
+      message.textContent = 'ยังเปิดภาพกล้องไม่ได้';
+      detail.textContent = 'ตรวจสิทธิ์กล้อง หรือเปิดหน้าเว็บด้วย Safari';
+      console.error('Camera video not ready');
     }
-
-    function updateStatus() {
-      if (!arReady) {
-        status('กำลังเริ่มกล้อง AR...', 'รอระบบเตรียมกล้อง');
-        return;
-      }
-
-      if (targetFound && modelReady && modelFitted) {
-        status('🐶 พบรูปหมาแล้ว!', 'โมเดล 3D แสดงบนรูป Tracker');
-        placement.setAttribute('visible', true);
-        return;
-      }
-
-      if (targetFound && !modelReady) {
-        status('พบรูปแล้ว กำลังโหลดโมเดล', 'ตรวจสอบไฟล์ dog_puppy.glb');
-        return;
-      }
-
-      if (targetFound && modelReady && !modelFitted) {
-        status('กำลังจัดขนาดโมเดล...', 'กำลังคำนวณขนาด 3D');
-        return;
-      }
-
-      status('กล้องพร้อมแล้ว', 'ส่องไปที่รูปเดียวกับที่ใช้สร้าง targets.mind');
-    }
-
-    // โหลดโมเดล
-    dog.addEventListener('model-loaded', function () {
-      const mesh = dog.getObject3D('mesh');
-
-      if (!mesh) {
-        status('โหลดไฟล์ได้ แต่ไม่พบโมเดล 3D', 'ตรวจสอบไฟล์ GLB');
-        console.error('ไม่พบ mesh ใน dog_puppy.glb');
-        return;
-      }
-
-      // คำนวณขนาดจาก geometry ของโมเดล
-      mesh.updateMatrixWorld(true);
-
-      const box = new THREE.Box3().setFromObject(mesh);
-      const size = new THREE.Vector3();
-      const center = new THREE.Vector3();
-
-      box.getSize(size);
-      box.getCenter(center);
-
-      console.log('ขนาดโมเดลต้นฉบับ:', size);
-
-      if (!Number.isFinite(size.y) || size.y < 0.0001) {
-        status('ขนาดโมเดลไม่ถูกต้อง', 'กรุณาตรวจสอบไฟล์ dog_puppy.glb');
-        console.error('ขนาดโมเดลผิดปกติ', size);
-        return;
-      }
-
-      /*
-        ตั้งความสูงหมาประมาณ 0.8 หน่วย AR
-        ปรับเป็น 1.0 หากต้องการให้ใหญ่ขึ้น
-      */
-      const desiredHeight = 0.8;
-      const factor = desiredHeight / size.y;
-
-      // ปรับ Transform ที่ entity ภายนอก mesh
-      placement.object3D.scale.setScalar(factor);
-      placement.object3D.position.set(
-        -center.x * factor,
-        -box.min.y * factor,
-        0.05
-      );
-
-      placement.object3D.updateMatrixWorld(true);
-
-      modelReady = true;
-      modelFitted = true;
-
-      console.log('ปรับขนาดโมเดลสำเร็จ:', factor);
-      updateStatus();
-    });
-
-    dog.addEventListener('model-error', function (event) {
-      placement.setAttribute('visible', false);
-      status('โหลดโมเดลไม่สำเร็จ', 'ตรวจสอบชื่อไฟล์ dog_puppy.glb');
-      console.error('MODEL ERROR:', event);
-    });
-
-    // ตรวจจับ Tracker
-    target.addEventListener('targetFound', function () {
-      targetFound = true;
-      console.log('TARGET FOUND');
-      updateStatus();
-    });
-
-    target.addEventListener('targetLost', function () {
-      targetFound = false;
-      placement.setAttribute('visible', false);
-      status('กำลังค้นหารูปหมา...', 'หันกล้องกลับไปที่รูป Tracker');
-    });
-
-    // สถานะระบบ AR
-    scene.addEventListener('arReady', function () {
-      arReady = true;
-      console.log('AR READY');
-      updateStatus();
-    });
-
-    scene.addEventListener('arError', function (event) {
-      arReady = false;
-      placement.setAttribute('visible', false);
-      status(
-        'เปิดระบบ AR ไม่สำเร็จ',
-        'ตรวจสิทธิ์กล้อง การเชื่อมต่อ และไฟล์ targets.mind'
-      );
-      console.error('AR ERROR:', event);
-    });
-
-    scene.addEventListener('loaded', function () {
-      console.log('A-Frame scene loaded');
-    });
-
-    window.addEventListener('error', function (event) {
-      console.error('PAGE ERROR:', event.message);
-    });
-  </script>
+  }
+}, 500);
+</script>
 </body>
 </html>
