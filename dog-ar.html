@@ -7,7 +7,9 @@
 <title>DOG AR</title>
 
 <style>
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 html, body {
   margin: 0;
@@ -16,6 +18,10 @@ html, body {
   overflow: hidden;
   background: #171923;
   font-family: Arial, Tahoma, sans-serif;
+}
+
+body {
+  position: relative;
 }
 
 a-scene {
@@ -27,7 +33,7 @@ a-scene {
 
 .header {
   position: fixed;
-  top: env(safe-area-inset-top, 10px);
+  top: env(safe-area-inset-top, 0px);
   left: 0;
   width: 100%;
   padding: 14px;
@@ -40,22 +46,22 @@ a-scene {
 .header h1 {
   margin: 0 0 6px;
   color: #ffbd69;
-  font-size: 25px;
+  font-size: 24px;
 }
 
 .header p {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .back {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 80px);
+  top: calc(env(safe-area-inset-top, 0px) + 75px);
   left: 12px;
   z-index: 20;
   border: none;
-  border-radius: 12px;
-  padding: 12px 15px;
+  border-radius: 10px;
+  padding: 11px 14px;
   background: #ffbd69;
   color: #222;
   font-weight: bold;
@@ -63,23 +69,23 @@ a-scene {
 
 .status {
   position: fixed;
-  z-index: 10;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 15px);
+  z-index: 20;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
   left: 4%;
   width: 92%;
-  padding: 15px;
+  padding: 14px;
   border: 1px solid #ffffff35;
-  border-radius: 18px;
-  background: #171923ed;
+  border-radius: 16px;
+  background: #171923eF;
   color: white;
   text-align: center;
   pointer-events: none;
 }
 
 #message {
-  margin: 0 0 6px;
-  font-size: 16px;
+  margin: 0 0 5px;
   font-weight: bold;
+  font-size: 16px;
 }
 
 #detail {
@@ -89,33 +95,19 @@ a-scene {
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-
-.marker-link {
-  position: fixed;
-  z-index: 10;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 115px);
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 9px 13px;
-  border-radius: 10px;
-  color: white;
-  background: #171923df;
-  text-decoration: none;
-  font-size: 13px;
-  white-space: nowrap;
-}
 </style>
 
-<script src="https://cdn.jsdelivr.net/npm/aframe@1.6.0/dist/aframe-master.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.8/aframe/build/aframe-ar.js"></script>
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
 <script>
 AFRAME.registerComponent('fit-dog', {
   init: function () {
-    this.el.addEventListener('model-loaded', (event) => {
-      const model = event.detail.model;
-      const THREE = AFRAME.THREE;
+    this.el.addEventListener('model-loaded', () => {
+      const model = this.el.getObject3D('mesh');
+      if (!model) return;
 
+      const THREE = AFRAME.THREE;
       model.updateMatrixWorld(true);
 
       const box = new THREE.Box3().setFromObject(model);
@@ -123,32 +115,35 @@ AFRAME.registerComponent('fit-dog', {
       const center = box.getCenter(new THREE.Vector3());
 
       if (!Number.isFinite(size.y) || size.y <= 0) {
-        console.error('Invalid dog model size', size);
+        console.error('Invalid model size');
         return;
       }
 
-      const targetHeight = 1.5;
+      const targetHeight = 0.6;
       const scale = targetHeight / size.y;
 
-      model.position.set(-center.x, -box.min.y, -center.z);
-      this.el.object3D.scale.setScalar(scale);
-      this.el.object3D.updateMatrixWorld(true);
+      model.scale.setScalar(scale);
+      model.updateMatrixWorld(true);
 
-      this.el.emit('dog-model-ready');
-      console.log('Dog model size:', size);
-      console.log('Dog model scale:', scale);
+      const scaledBox = new THREE.Box3().setFromObject(model);
+      const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
+
+      model.position.x -= scaledCenter.x;
+      model.position.y -= scaledBox.min.y;
+      model.position.z -= scaledCenter.z;
+
+      this.el.emit('dog-ready');
     });
   }
 });
 
-AFRAME.registerComponent('play-dog-animation', {
+AFRAME.registerComponent('dog-animation', {
   init: function () {
     this.mixer = null;
-
     this.el.addEventListener('model-loaded', (event) => {
       const model = event.detail.model;
 
-      if (model.animations && model.animations.length > 0) {
+      if (model.animations && model.animations.length) {
         this.mixer = new AFRAME.THREE.AnimationMixer(model);
         this.mixer.clipAction(model.animations[0]).play();
       }
@@ -156,7 +151,7 @@ AFRAME.registerComponent('play-dog-animation', {
   },
 
   tick: function (time, delta) {
-    if (this.mixer) {
+    if (this.mixer && delta > 0) {
       this.mixer.update(delta / 1000);
     }
   }
@@ -165,32 +160,27 @@ AFRAME.registerComponent('play-dog-animation', {
 </head>
 
 <body>
+
 <header class="header">
   <h1>🐶 DOG AR</h1>
-  <p>ส่องกล้องไปที่ Marker เพื่อดูหมา 3D</p>
+  <p>หันกล้องไปที่รูปหมาเพื่อแสดงโมเดล 3D</p>
 </header>
 
 <button class="back" onclick="location.href='./index.html'">
   ← กลับหน้าหลัก
 </button>
 
-<a class="marker-link"
-   href="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/HIRO.jpg"
-   target="_blank" rel="noopener">
-   เปิดรูป Hiro Marker
-</a>
-
 <div class="status">
-  <p id="message">กำลังเริ่มกล้อง...</p>
-  <p id="detail">กรุณาอนุญาตให้เว็บไซต์ใช้กล้อง</p>
+  <p id="message">กำลังเตรียมระบบ AR...</p>
+  <p id="detail">กรุณารอสักครู่</p>
 </div>
 
 <a-scene
-  embedded
+  mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no;"
+  color-space="sRGB"
+  renderer="colorManagement: true; physicallyCorrectLights: true"
   vr-mode-ui="enabled: false"
-  loading-screen="enabled: false"
-  renderer="alpha: true; antialias: true; colorManagement: true"
-  arjs="sourceType: webcam; debugUIEnabled: false;">
+  device-orientation-permission-ui="enabled: false">
 
   <a-assets timeout="30000">
     <a-asset-item
@@ -199,53 +189,63 @@ AFRAME.registerComponent('play-dog-animation', {
     </a-asset-item>
   </a-assets>
 
-  <a-marker
-    id="hiroMarker"
-    preset="hiro"
-    smooth="true"
-    smoothCount="5"
-    smoothTolerance=".01"
-    smoothThreshold="2">
+  <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+  <a-entity id="target" mindar-image-target="targetIndex: 0">
 
     <a-entity
       id="dog"
       gltf-model="#dogModel"
       fit-dog
-      play-dog-animation>
+      dog-animation
+      position="0 0 0"
+      rotation="0 0 0">
     </a-entity>
 
-  </a-marker>
+  </a-entity>
 
-  <a-entity camera></a-entity>
 </a-scene>
 
 <script>
 const message = document.getElementById('message');
 const detail = document.getElementById('detail');
-const marker = document.getElementById('hiroMarker');
+const scene = document.querySelector('a-scene');
+const target = document.getElementById('target');
 const dog = document.getElementById('dog');
 
 let modelReady = false;
-let markerFound = false;
-let cameraReady = false;
+let targetFound = false;
+let arStarted = false;
 
 function updateStatus() {
-  if (!cameraReady) {
+  if (!arStarted) {
     message.textContent = 'กำลังเปิดกล้อง...';
-    detail.textContent = 'อนุญาตสิทธิ์กล้องในเบราว์เซอร์';
+    detail.textContent = 'ตรวจสอบสิทธิ์กล้องและรอสักครู่';
   } else if (!modelReady) {
-    message.textContent = 'กล้องทำงานแล้ว';
+    message.textContent = 'กล้องเริ่มทำงานแล้ว';
     detail.textContent = 'กำลังโหลดโมเดลหมา 3D';
-  } else if (markerFound) {
-    message.textContent = '🐶 พบ Marker แล้ว!';
-    detail.textContent = 'โมเดลหมาควรแสดงอยู่บนรูป Hiro';
+  } else if (targetFound) {
+    message.textContent = '🐶 พบรูปหมาแล้ว!';
+    detail.textContent = 'กำลังแสดงโมเดล 3D';
   } else {
     message.textContent = 'กล้องพร้อมแล้ว';
-    detail.textContent = 'ส่องกล้องไปที่รูป Hiro Marker';
+    detail.textContent = 'ส่องกล้องไปที่รูปหมาที่ใช้สร้าง targets.mind';
   }
 }
 
-dog.addEventListener('model-loaded', () => {
+scene.addEventListener('arReady', () => {
+  arStarted = true;
+  updateStatus();
+});
+
+scene.addEventListener('arError', (event) => {
+  message.textContent = 'เปิดกล้องหรือระบบ AR ไม่สำเร็จ';
+  detail.textContent =
+    'ตรวจสอบสิทธิ์กล้อง การเชื่อมต่ออินเทอร์เน็ต และเปิดเว็บผ่าน HTTPS';
+  console.error('AR ERROR', event);
+});
+
+dog.addEventListener('dog-ready', () => {
   modelReady = true;
   updateStatus();
 });
@@ -253,47 +253,23 @@ dog.addEventListener('model-loaded', () => {
 dog.addEventListener('model-error', (event) => {
   message.textContent = 'โหลดโมเดลหมาไม่สำเร็จ';
   detail.textContent = 'ตรวจสอบไฟล์ dog_puppy.glb';
-  console.error('DOG MODEL ERROR', event);
+  console.error('MODEL ERROR', event);
 });
 
-marker.addEventListener('markerFound', () => {
-  markerFound = true;
+target.addEventListener('targetFound', () => {
+  targetFound = true;
   updateStatus();
 });
 
-marker.addEventListener('markerLost', () => {
-  markerFound = false;
+target.addEventListener('targetLost', () => {
+  targetFound = false;
   updateStatus();
 });
 
-document.querySelector('a-scene').addEventListener('loaded', () => {
-  console.log('A-Frame scene loaded');
+scene.addEventListener('loaded', () => {
+  detail.textContent = 'กำลังเริ่มระบบกล้องและโหลดโมเดล';
 });
-
-let cameraCheckCount = 0;
-
-const cameraCheck = setInterval(() => {
-  const video = document.querySelector('video');
-
-  if (video && video.srcObject && video.readyState >= 2) {
-    cameraReady = true;
-    clearInterval(cameraCheck);
-    updateStatus();
-    console.log('CAMERA VIDEO READY');
-  }
-
-  cameraCheckCount++;
-
-  if (cameraCheckCount >= 30) {
-    clearInterval(cameraCheck);
-
-    if (!cameraReady) {
-      message.textContent = 'ยังเปิดภาพกล้องไม่ได้';
-      detail.textContent = 'ตรวจสิทธิ์กล้อง หรือเปิดหน้าเว็บด้วย Safari';
-      console.error('Camera video not ready');
-    }
-  }
-}, 500);
 </script>
+
 </body>
 </html>
