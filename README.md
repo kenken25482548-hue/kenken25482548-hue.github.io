@@ -1,12 +1,11 @@
-# Cyber Circuit Face Mesh Texture AR
+# NEON GEAR — Face Tracking 3D AR
 
-งานใหม่แยกจาก Repository เดิม ใช้ MindAR และ A-Frame สำหรับฟิลเตอร์ติดตามใบหน้า มีปุ่มเปลี่ยนรูปแบบและเริ่มที่ Cyber Circuit
+งานใหม่ **Face Tracking (3D)**: ใช้ MindAR Face Tracking + A-Frame ยึดวัตถุ 3 มิติเข้ากับจุดบนใบหน้า และมีปุ่มสลับ 3 ดีไซน์ ได้แก่ Cyber Visor, Holo Halo และ Robot Antenna
 
-## วิธีเผยแพร่
-1. สร้าง GitHub repository ใหม่ชื่อ `cyber-circuit-face-ar` เป็น Public
-2. อัปโหลด `cyber_circuit_face_mesh.html` (ไม่ต้องเปลี่ยนเป็น index.html)
-3. ไปที่ Settings > Pages > Deploy from a branch > main > /(root) > Save
-4. เปิด `https://kenken25482548-hue.github.io/cyber-circuit-face-ar/cyber_circuit_face_mesh.html` หลัง deploy สำเร็จ
-5. อนุญาตกล้องและทดสอบบนมือถือ
+## วิธีอัปโหลดโดยไม่ทับงานเดิม
+1. เข้า repository `kenken25482548-hue.github.io` เดิม
+2. อัปโหลด **เฉพาะ** `face_tracking_3d.html` ไว้ที่ root (ห้ามอัปโหลด README.md ทับ README เดิม)
+3. เปิด `https://kenken25482548-hue.github.io/face_tracking_3d.html`
+4. อนุญาตกล้องหน้า แล้วกดสลับสไตล์ได้
 
-ไม่มีการแก้ไขไฟล์ใดใน repository เดิม
+เว็บต้องเปิดผ่าน HTTPS, กล้องต้องได้รับอนุญาต และต้องต่อเน็ตเพื่อโหลดไลบรารีจาก CDN. การติดตามขึ้นกับกล้อง แสง และเบราว์เซอร์ จึงควรทดสอบบนโทรศัพท์จริง.
