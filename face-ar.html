@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Funny Robot Face AR</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111522;font-family:Arial,Tahoma,sans-serif}
+#video,#three{position:fixed;inset:0;width:100%;height:100%;object-fit:cover}
+#video{transform:scaleX(-1);z-index:0}
+#three{z-index:1;pointer-events:none}
+.panel{position:fixed;z-index:5;left:4%;width:92%;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);padding:13px 15px;border-radius:16px;background:#101522dd;color:white;text-align:center;border:1px solid #ffffff30}
+#status{font-weight:bold;margin:0 0 5px}
+#help{font-size:12px;color:#d8deed;line-height:1.45;margin:0}
+#start{position:fixed;z-index:10;top:calc(env(safe-area-inset-top,0px) + 14px);left:50%;transform:translateX(-50%);border:0;border-radius:12px;padding:12px 17px;background:#ffbd69;color:#171923;font-weight:bold;font-size:15px;white-space:nowrap}
+#switch{position:fixed;z-index:10;top:calc(env(safe-area-inset-top,0px) + 68px);right:12px;border:0;border-radius:10px;padding:10px 12px;background:#fff;color:#171923;font-weight:bold}
+#error{color:#ffb8b8}
+</style>
+</head>
+<body>
+<video id="video" autoplay playsinline muted></video>
+<canvas id="three"></canvas>
+<button id="start">เปิดกล้องหน้า</button>
+<button id="switch" hidden>สลับกล้อง</button>
+<div class="panel">
+  <p id="status">พร้อมเริ่ม Face Tracking</p>
+  <p id="help">กด “เปิดกล้องหน้า” แล้วอนุญาตใช้กล้อง จากนั้นหันหน้าเข้ากล้อง</p>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+import { FaceLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+
+const video = document.querySelector('#video');
+const canvas = document.querySelector('#three');
+const statusEl = document.querySelector('#status');
+const helpEl = document.querySelector('#help');
+const startBtn = document.querySelector('#start');
+const switchBtn = document.querySelector('#switch');
+
+let stream = null;
+let faceLandmarker = null;
+let model = null;
+let facingMode = 'user';
+let lastVideoTime = -1;
+let faceSeen = false;
+
+const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setClearColor(0x000000, 0);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
+camera.position.set(0, 0, 10);
+camera.lookAt(0,0,0);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x4b5577, 2.2));
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
+keyLight.position.set(1, 2, 5);
+scene.add(keyLight);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  const aspect = w / h;
+  camera.left = -aspect;
+  camera.right = aspect;
+  camera.top = 1;
+  camera.bottom = -1;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+const loader = new GLTFLoader();
+loader.load('./funny_robot_head.glb', (gltf) => {
+  model = gltf.scene;
+  model.traverse((obj) => {
+    if (obj.isMesh) {
+      obj.frustumCulled = false;
+      if (obj.material) {
+        obj.material.side = THREE.DoubleSide;
+      }
+    }
+  });
+
+  // Center and normalize the model so its width is 1.0 world unit.
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  model.position.sub(center);
+  const maxDim = Math.max(size.x, size.y, size.z) || 1;
+  model.userData.normalizedScale = 1 / maxDim;
+  model.scale.setScalar(model.userData.normalizedScale);
+  model.position.multiplyScalar(model.userData.normalizedScale);
+  model.visible = false;
+  scene.add(model);
+  statusEl.textContent = 'โหลดหัวหุ่นยนต์แล้ว';
+  helpEl.textContent = 'กด “เปิดกล้องหน้า” เพื่อเริ่มจับใบหน้า';
+}, undefined, (err) => {
+  console.error(err);
+  statusEl.textContent = 'โหลดโมเดลไม่สำเร็จ';
+  helpEl.innerHTML = '<span id="error">ตรวจสอบว่า funny_robot_head.glb อยู่โฟลเดอร์เดียวกับ face-ar.html</span>';
+});
+
+async function stopCamera() {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+  video.srcObject = null;
+}
+
+async function startCamera() {
+  try {
+    startBtn.disabled = true;
+    statusEl.textContent = 'กำลังขออนุญาตกล้อง...';
+    helpEl.textContent = 'หากมีหน้าต่างถามสิทธิ์ ให้เลือก Allow / อนุญาต';
+
+    await stopCamera();
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode,
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    });
+    video.srcObject = stream;
+    await video.play();
+
+    statusEl.textContent = 'กำลังเตรียมระบบตรวจจับใบหน้า...';
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+    );
+    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+        delegate: 'GPU'
+      },
+      runningMode: 'VIDEO',
+      numFaces: 1,
+        outputFaceBlendshapes: true
+    });
+
+    startBtn.hidden = true;
+    switchBtn.hidden = false;
+    statusEl.textContent = 'กล้องพร้อมแล้ว';
+    helpEl.textContent = 'หันหน้าเข้ากล้อง ให้อยู่ในกรอบภาพ';
+    requestAnimationFrame(trackFrame);
+  } catch (err) {
+    console.error(err);
+    startBtn.disabled = false;
+    statusEl.textContent = 'เปิดกล้องไม่สำเร็จ';
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+      helpEl.textContent = 'ต้องเปิดผ่าน HTTPS (GitHub Pages) และอนุญาตกล้องในเบราว์เซอร์';
+    } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      helpEl.textContent = 'คุณยังไม่อนุญาตกล้อง: แตะไอคอนข้าง URL แล้วตั้ง Camera เป็น Allow';
+    } else if (err.name === 'NotFoundError') {
+      helpEl.textContent = 'ไม่พบกล้องในอุปกรณ์นี้';
+    } else {
+      helpEl.textContent = 'ตรวจสอบสิทธิ์กล้องและอินเทอร์เน็ต แล้วลองใหม่ (' + err.name + ')';
+    }
+  }
+}
+
+function trackFrame() {
+  if (!faceLandmarker || video.readyState < 2) {
+    requestAnimationFrame(trackFrame);
+    return;
+  }
+  if (video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    const result = faceLandmarker.detectForVideo(video, performance.now());
+    const landmarks = result.faceLandmarks && result.faceLandmarks[0];
+    if (landmarks && model) {
+      faceSeen = true;
+      model.visible = true;
+
+      // Landmark positions: 234/454 face sides, 33/263 eye corners, 10 forehead, 152 chin.
+      const leftSide = landmarks[234];
+      const rightSide = landmarks[454];
+      const leftEye = landmarks[33];
+      const rightEye = landmarks[263];
+      const forehead = landmarks[10];
+      const chin = landmarks[152];
+
+      const cx = (leftSide.x + rightSide.x) / 2;
+      const cy = (forehead.y + chin.y) / 2;
+      const faceWidth = Math.hypot(rightSide.x-leftSide.x, rightSide.y-leftSide.y);
+      const roll = Math.atan2(rightEye.y-leftEye.y, rightEye.x-leftEye.x);
+
+      const aspect = window.innerWidth / window.innerHeight;
+      // Mirror the x-coordinate to match the mirrored selfie preview.
+      model.position.x = ((1 - cx) * 2 - 1) * aspect;
+      model.position.y = (1 - cy * 2);
+      // The imported GLB is normalized to max dimension 1; fit it to face width.
+      const targetWidth = Math.max(0.15, faceWidth * 2 * aspect * 1.45);
+      model.scale.setScalar(targetWidth * model.userData.normalizedScale);
+      model.rotation.z = -roll;
+      statusEl.textContent = '🐸 พบใบหน้าแล้ว!';
+      helpEl.textContent = 'หัวหุ่นยนต์กำลังติดตามตำแหน่งและการเอียงศีรษะ';
+    } else {
+      faceSeen = false;
+      if (model) model.visible = false;
+      statusEl.textContent = 'กำลังหาใบหน้า...';
+      helpEl.textContent = 'มองกล้องให้เห็นใบหน้าชัดเจนและมีแสงเพียงพอ';
+    }
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(trackFrame);
+}
+
+startBtn.addEventListener('click', startCamera);
+switchBtn.addEventListener('click', async () => {
+  facingMode = facingMode === 'user' ? 'environment' : 'user';
+  await startCamera();
+});
+renderer.setAnimationLoop(() => {
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
