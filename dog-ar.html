@@ -6,46 +6,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Dog AR</title>
 
-  <!-- โหลด A-Frame ก่อน MindAR -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     html, body {
       margin: 0;
-      padding: 0;
       width: 100%;
       height: 100%;
       overflow: hidden;
       background: #171923;
-      color: white;
       font-family: Arial, Tahoma, sans-serif;
-    }
-
-    /* ฉากไม่ใช้ embedded เพื่อให้แสดงเต็มจอ */
-    body {
-      position: fixed;
-      inset: 0;
+      color: white;
     }
 
     .header {
       position: fixed;
-      top: max(12px, env(safe-area-inset-top));
+      top: env(safe-area-inset-top, 0px);
       left: 0;
       width: 100%;
-      z-index: 100;
+      z-index: 10;
       text-align: center;
-      padding: 12px;
-      background: linear-gradient(
-        to bottom,
-        rgba(15, 17, 25, .8),
-        transparent
-      );
+      padding: 14px;
       pointer-events: none;
+      background: linear-gradient(#171923bb, transparent);
     }
 
     .header h1 {
@@ -61,63 +47,70 @@
 
     .back {
       position: fixed;
-      top: max(100px, calc(env(safe-area-inset-top) + 80px));
+      z-index: 20;
+      top: calc(env(safe-area-inset-top, 0px) + 85px);
       left: 12px;
-      z-index: 110;
       border: 0;
       border-radius: 12px;
       padding: 11px 14px;
       background: #ffbd69;
       color: #222;
       font-weight: bold;
-      font-size: 14px;
     }
 
     .status {
       position: fixed;
+      z-index: 10;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 15px);
       left: 5%;
-      bottom: max(18px, env(safe-area-inset-bottom));
       width: 90%;
-      z-index: 100;
-      padding: 15px;
+      padding: 14px;
       text-align: center;
+      border: 1px solid #ffffff30;
       border-radius: 16px;
-      background: rgba(20, 22, 33, .92);
-      border: 1px solid rgba(255,255,255,.18);
+      background: #171923e8;
       pointer-events: none;
     }
 
     #message {
       font-weight: bold;
-      font-size: 16px;
       margin: 0 0 5px;
     }
 
     #detail {
-      font-size: 12px;
-      line-height: 1.6;
-      color: #d4d7e3;
       margin: 0;
+      color: #d4d7e3;
+      font-size: 12px;
+      line-height: 1.5;
       overflow-wrap: anywhere;
     }
 
-    /* ปล่อยให้ MindAR จัดขนาดวิดีโอและ canvas */
-    a-scene:not([embedded]) {
+    a-scene {
       position: fixed !important;
-      inset: 0 !important;
+      top: 0 !important;
+      left: 0 !important;
       width: 100% !important;
       height: 100% !important;
-      margin: 0 !important;
-      padding: 0 !important;
+      z-index: 1;
+    }
+
+    a-scene canvas,
+    a-scene video,
+    .mindar-ui-overlay,
+    .mindar-ui-scanning {
+      /* กล้องและ Canvas ต้องเต็มหน้าจอ */
+    }
+
+    .error {
+      color: #ffb4a9;
     }
   </style>
 </head>
 
 <body>
-
   <header class="header">
     <h1>🐶 DOG AR</h1>
-    <p>ส่องรูปหมาเพื่อแสดงโมเดล 3D</p>
+    <p>ส่องรูปหมาเพื่อดูโมเดล 3D</p>
   </header>
 
   <button class="back" onclick="location.href='./index.html'">
@@ -126,19 +119,13 @@
 
   <div class="status">
     <p id="message">กำลังเริ่มระบบ AR...</p>
-    <p id="detail">กรุณารอและอนุญาตการใช้กล้อง</p>
+    <p id="detail">โปรดรอและอนุญาตให้เว็บไซต์ใช้กล้อง</p>
   </div>
 
   <a-scene
-    mindar-image="
-      imageTargetSrc: ./targets.mind;
-      autoStart: true;
-      uiLoading: no;
-      uiScanning: no;
-      uiError: no;
-    "
+    mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no; uiError: no;"
     color-space="sRGB"
-    renderer="colorManagement: true"
+    renderer="colorManagement: true; physicallyCorrectLights: true"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
 
@@ -158,16 +145,15 @@
       id="dogTarget"
       mindar-image-target="targetIndex: 0">
 
-<a-gltf-model
-  id="dog"
-  src="#dogModel"
-  position="0 0 0.1"
-  rotation="0 0 0"
-  scale="0.5 0.5 0.5">
-</a-gltf-model>
+      <a-gltf-model
+        id="dog"
+        src="#dogModel"
+        position="0 0 0.1"
+        rotation="0 0 0"
+        scale="0.1 0.1 0.1">
+      </a-gltf-model>
 
     </a-entity>
-
   </a-scene>
 
   <script>
@@ -178,68 +164,60 @@
     const dog = document.getElementById("dog");
 
     let modelLoaded = false;
-    let imageFound = false;
+    let targetFound = false;
 
-    function showStatus() {
-      if (imageFound && modelLoaded) {
+    function updateStatus() {
+      if (targetFound && modelLoaded) {
         message.textContent = "🐶 พบรูปหมาแล้ว!";
-        detail.textContent = "โมเดล 3D ควรปรากฏบนรูปที่กำลังส่อง";
-      } else if (imageFound) {
-        message.textContent = "ตรวจพบรูปแล้ว";
-        detail.textContent = "กำลังโหลดโมเดลหมา...";
+        detail.textContent = "โมเดลโหลดแล้วและควรปรากฏบนรูป";
+      } else if (targetFound && !modelLoaded) {
+        message.textContent = "พบรูปแล้ว แต่โมเดลยังไม่โหลด";
+        detail.textContent = "ตรวจสอบไฟล์ dog_puppy.glb";
       } else if (modelLoaded) {
-        message.textContent = "โมเดลโหลดสำเร็จ";
-        detail.textContent = "หันกล้องไปยังรูปที่ใช้สร้าง targets.mind";
+        message.textContent = "โมเดลพร้อมแล้ว";
+        detail.textContent = "ส่องรูปที่ใช้สร้าง targets.mind";
+      } else {
+        message.textContent = "กำลังโหลดโมเดล...";
+        detail.textContent = "รอให้ระบบเตรียมไฟล์เสร็จ";
       }
     }
 
     dog.addEventListener("model-loaded", function () {
       modelLoaded = true;
-      showStatus();
-      console.log("DOG MODEL LOADED");
+      updateStatus();
+      console.log("MODEL_LOADED");
     });
 
     dog.addEventListener("model-error", function (event) {
       message.textContent = "โหลดโมเดลไม่สำเร็จ";
-      detail.textContent = "ตรวจสอบ dog_puppy.glb";
-      console.error("DOG MODEL ERROR", event);
+      detail.textContent = "ตรวจสอบไฟล์ dog_puppy.glb และชื่อไฟล์";
+      console.error("MODEL_ERROR", event);
     });
 
     target.addEventListener("targetFound", function () {
-      imageFound = true;
-      showStatus();
-      console.log("IMAGE TARGET FOUND");
+      targetFound = true;
+      updateStatus();
+      console.log("TARGET_FOUND");
     });
 
     target.addEventListener("targetLost", function () {
-      imageFound = false;
-      showStatus();
+      targetFound = false;
       message.textContent = "กำลังค้นหารูป...";
-      detail.textContent = "ถือกล้องให้เห็นรูป Tracker ชัดเจน";
+      detail.textContent = "หันกล้องไปยังรูป Tracker";
     });
 
     scene.addEventListener("arReady", function () {
       message.textContent = "กล้องพร้อมใช้งาน";
-      detail.textContent = "ส่องไปยังรูปหมาที่ใช้สร้าง Tracker";
-      showStatus();
-      console.log("AR READY");
+      detail.textContent = "ส่องไปที่รูปหมา";
+      updateStatus();
+      console.log("AR_READY");
     });
 
     scene.addEventListener("arError", function (event) {
-      message.textContent = "เปิดกล้องหรือระบบ AR ไม่สำเร็จ";
-      detail.textContent =
-        "ตรวจสิทธิ์กล้อง อินเทอร์เน็ต และไฟล์ targets.mind";
-      console.error("AR ERROR", event);
-    });
-
-    scene.addEventListener("loaded", function () {
-      console.log("A-FRAME SCENE LOADED");
-    });
-
-    window.addEventListener("error", function (event) {
-      console.error("PAGE ERROR", event.message);
+      message.textContent = "ระบบ AR เกิดข้อผิดพลาด";
+      detail.textContent = "ตรวจสอบสิทธิ์กล้องและไฟล์ Tracker";
+      console.error("AR_ERROR", event);
     });
   </script>
-
 </body>
 </html>
